@@ -57,7 +57,7 @@ const handle_mouse_down = (e: MouseEvent, tree_app: TreeApp, offset: Vector2) =>
     let pt = tree_app.tree_grid.createSVGPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
-    pt = new Vector2(pt.matrixTransform(ctm.inverse()));
+    pt = pt.matrixTransform(ctm.inverse());
     offset.x = pt.x - el_dragged.x;
     offset.y = pt.y - el_dragged.y;
 };
