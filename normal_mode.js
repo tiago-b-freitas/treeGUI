@@ -1,12 +1,11 @@
 import { throttle, Vector2 } from './common.js';
-import { scale_factor, min_x, min_y } from './main.js';
+import { scale_factor, padding } from './main.js';
 var el_dragged;
 var is_dragging;
 const handle_mouse_move_El = throttle((e, offset) => {
     if (is_dragging && el_dragged !== null) {
-        const x = (e.clientX * scale_factor) + min_x - offset.x;
-        const y = (e.clientY * scale_factor) + min_y - offset.y;
-        el_dragged.move_to(x, y);
+        const coords = new Vector2(e.clientX, e.clientY).scale(scale_factor).add(padding).sub(offset);
+        el_dragged.move_to(coords);
     }
 }, 16.67);
 const handle_mouse_move_line = throttle((e, tree_app) => {
@@ -47,11 +46,13 @@ const handle_mouse_down = (e, tree_app, offset) => {
     el_dragged = tree_app.pool.get_from_svg(target);
     el_dragged.el.setAttribute('fill', 'red');
     is_dragging = true;
-    const ctm = el_dragged.el.getScreenCTM();
     let pt = tree_app.tree_grid.createSVGPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
-    pt = pt.matrixTransform(ctm.inverse());
+    const screen_ctm = target.getScreenCTM();
+    if (screen_ctm === null)
+        throw new Error(`Not possible to retrieve screen CTM from target ${target}`);
+    pt = pt.matrixTransform(screen_ctm.inverse());
     offset.x = pt.x - el_dragged.x;
     offset.y = pt.y - el_dragged.y;
 };

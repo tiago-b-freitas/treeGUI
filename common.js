@@ -1,19 +1,31 @@
-export var Mode;
-(function (Mode) {
-    Mode[Mode["INITIAL_MODE"] = 0] = "INITIAL_MODE";
-    Mode[Mode["NORMAL_MODE"] = 1] = "NORMAL_MODE";
-    Mode[Mode["INSERT_MODE"] = 2] = "INSERT_MODE";
-    Mode[Mode["UNDEFINIED"] = -1] = "UNDEFINIED";
-})(Mode || (Mode = {}));
-export var TypeObj;
-(function (TypeObj) {
-    TypeObj[TypeObj["BOND_OBJ"] = 0] = "BOND_OBJ";
-    TypeObj[TypeObj["RECT_OBJ"] = 1] = "RECT_OBJ";
-})(TypeObj || (TypeObj = {}));
+export class Vector2 {
+    x;
+    y;
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+    len(other) {
+        return Math.sqrt((this.x - other.x) ** 2 + (this.y - other.y) ** 2);
+    }
+    scale(scalar) {
+        return new Vector2(this.x * scalar, this.y * scalar);
+    }
+    sub(other) {
+        return new Vector2(this.x - other.x, this.y - other.y);
+    }
+    add(other) {
+        return new Vector2(this.x + other.x, this.y + other.y);
+    }
+    div(scalar) {
+        return new Vector2(this.x / scalar, this.y / scalar);
+    }
+}
 export class ElLine {
-    el_key = -1;
+    el_key;
     el;
     constructor(el0, el1) {
+        this.el_key = null;
         this.el = (document.createElementNS('http://www.w3.org/2000/svg', 'line'));
         this.move_to(el0, el1);
         this.el.setAttribute('stroke', 'white');
@@ -22,15 +34,14 @@ export class ElLine {
         this.el.setAttribute('marker-end', 'url(#triangle)');
     }
     move_to(el0, el1) {
-        switch (el1.class_name) {
-            case 'ElRect':
-                var [x1, y1, x2, y2] = el0.smallest_way_from_el(el1);
-                break;
-            case 'Vector2':
-                var [x1, y1, x2, y2] = el0.smallest_way_from_points(el1);
-                break;
-            default:
-                throw new Error(`Class nome not identified ${el1.class_name}`);
+        if (el1 instanceof ElRect) {
+            var [x1, y1, x2, y2] = el0.smallest_way_from_el(el1);
+        }
+        else if (el1 instanceof Vector2) {
+            var [x1, y1, x2, y2] = el0.smallest_way_from_points(el1);
+        }
+        else {
+            throw new Error(`Improper class ${el1.constructor.name}`);
         }
         this.el.setAttribute('x1', x1.toString());
         this.el.setAttribute('y1', y1.toString());
@@ -82,11 +93,11 @@ export class ElRect {
         this.bottom_point.y = this.y + this.h;
         return [this.left_point, this.right_point, this.top_point, this.bottom_point];
     }
-    move_to(x, y) {
-        this.x = x;
-        this.el.setAttribute('x', x.toString());
-        this.y = y;
-        this.el.setAttribute('y', y.toString());
+    move_to(coords) {
+        this.x = coords.x;
+        this.el.setAttribute('x', this.x.toString());
+        this.y = coords.y;
+        this.el.setAttribute('y', this.y.toString());
         this.start_points = this.get_start_points();
     }
     smallest_way_from_el(other) {
@@ -120,31 +131,6 @@ export class ElRect {
         return smallest_v;
     }
 }
-export class Vector2 {
-    class_name;
-    x;
-    y;
-    constructor(x, y) {
-        this.class_name = 'Vector2';
-        this.x = x;
-        this.y = y;
-    }
-    len(other) {
-        return Math.sqrt((this.x - other.x) ** 2 + (this.y - other.y) ** 2);
-    }
-    scale(scalar) {
-        return new Vector2(this.x * scalar, this.y * scalar);
-    }
-    sub(other) {
-        return new Vector2(this.x - other.x, this.y - other.y);
-    }
-    add(other) {
-        return new Vector2(this.x + other.x, this.y + other.y);
-    }
-    div(scalar) {
-        return new Vector2(this.x / scalar, this.y / scalar);
-    }
-}
 export class Pool {
     el_key;
     pool;
@@ -154,6 +140,8 @@ export class Pool {
     }
     push(el, elements) {
         this.pool.set(this.el_key, el);
+        if (this.el_key === null)
+            throw new Error('The el_key is null');
         el.el.setAttribute('el_key', this.el_key.toString());
         this.el_key += 1;
         elements.appendChild(el.el);

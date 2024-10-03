@@ -1,6 +1,7 @@
-import { switch_mode } from './main.js';
-import { throttle, TreeApp, Obj, Vector2, El, ElRect, ElLine, getRandomRange } from './common.js';
-import { WIDTH, HEIGHT } from './definitions.js';
+import { switch_mode, scale_factor, padding } from './main.js';
+import { throttle, Vector2, ElRect, ElLine, getRandomRange } from './common.js';
+
+import { WIDTH, HEIGHT, TreeApp, El, Obj } from './definitions.js';
 
 var starter_obj: Obj | null;
 var line: ElLine | null;
@@ -32,7 +33,6 @@ const handle_mouse_over = (e: MouseEvent) => {
 
 const handle_mouse_down = (e: MouseEvent, tree_app: TreeApp) => {
     const target = e.target as SVGElement;
-    console.log(target);
     if (target === null || !target.matches('.draggable')) {
         if (is_putting) {
             is_putting = false;
@@ -40,7 +40,7 @@ const handle_mouse_down = (e: MouseEvent, tree_app: TreeApp) => {
                 starter_obj.el.setAttribute('fill', 'gray');
                 starter_obj = null;
             }
-            if (line !== null) {
+            if (line !== null && line.el_key !== null) {
                 tree_app.pool.remove(line.el_key, tree_app.elements);
                 line = null;
             }
@@ -57,7 +57,7 @@ const handle_mouse_down = (e: MouseEvent, tree_app: TreeApp) => {
     } else {
         starter_obj = obj;
         target.setAttribute('fill', 'yellow');
-        const mouse_coords = new Vector2(e.clientX, e.clientY);
+        const mouse_coords = new Vector2(e.clientX, e.clientY).scale(scale_factor).add(padding);
         line = create_line(tree_app, starter_obj as Obj, mouse_coords);
         is_putting = true;
     }
@@ -65,7 +65,7 @@ const handle_mouse_down = (e: MouseEvent, tree_app: TreeApp) => {
 
 const handle_mouse_move = throttle((e: MouseEvent) => {
     if (is_putting && starter_obj !== null && line !== null) {
-        let mouse_coords = new Vector2(e.clientX, e.clientY);
+        let mouse_coords = new Vector2(e.clientX, e.clientY).scale(scale_factor).add(padding);
         //TODO angle 
         if (starter_obj.x > mouse_coords.x) {
             mouse_coords.x += 50;

@@ -1,5 +1,5 @@
-import { Pool, Mode, Vector2 } from './common.js';
-import { WIDTH, HEIGHT } from './definitions.js';
+import { Pool, Vector2 } from './common.js';
+import { WIDTH, HEIGHT, Mode } from './definitions.js';
 import * as normal from './normal_mode.js';
 import * as insert from './insert_mode.js';
 export function switch_mode(tree_app, mode, obj) {
@@ -76,13 +76,11 @@ function initial_set_up(tree_app) {
             case 'ArrowLeft':
                 const width = WIDTH * scale_factor;
                 const height = HEIGHT * scale_factor;
-                min_x = (WIDTH - width) / 2;
-                min_y = (HEIGHT - height) / 2;
-                min_y += translate_vector2.y * MOVE_GRID_SPEED * width / WIDTH;
-                min_x += translate_vector2.x * MOVE_GRID_SPEED * height / HEIGHT;
-                // min_y = 0;
-                // min_x = 0;
-                tree_app.tree_grid.setAttribute('viewBox', `${min_x} ${min_y} ${width} ${height}`);
+                padding.x = (WIDTH - width) / 2;
+                padding.y = (HEIGHT - height) / 2;
+                padding.x += translate_vector2.x * MOVE_GRID_SPEED * width / WIDTH;
+                padding.y += translate_vector2.y * MOVE_GRID_SPEED * height / HEIGHT;
+                tree_app.tree_grid.setAttribute('viewBox', `${padding.x} ${padding.y} ${width} ${height}`);
                 break;
         }
     });
@@ -91,8 +89,7 @@ const MOVE_GRID_SPEED = 100;
 export var scale_factor = 1;
 var scale_speed_atenuator = 3;
 var translate_vector2 = new Vector2(0, 0);
-export var min_x = 0;
-export var min_y = 0;
+export var padding = new Vector2(0, 0);
 const grid_center = new Vector2(WIDTH, HEIGHT).div(2);
 (() => {
     const tree_grid = document.getElementById('tree_grid');
