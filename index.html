@@ -56,32 +56,82 @@
         }
         /* end reset.css */
 
-        body {
-            background: #181818;
-        }
         html, body {
-            height: 100%;
-            width: 100%;
-            margin: 0;
+          width: 100%;
+          height: 100%;
+          background-color: #181818;
+        }
+        body {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          resize: both;
+          overflow: auto;
+        }
+        svg {
+          background-color: white;
+          resize: both;
+          overflow: auto;
+        }
+        .draggable {
+          filter: drop-shadow(rgba(0, 0, 0, 0.7) 3px 3px 2px);
+          cursor: pointer;
+        }
+        #menu-grid {
+            border: 2px solid hsla(0, 0%, 0%, 0.5);
+            position: fixed;
+            left: 10px;
+        }
+        image {
+            draggable="false";
+        }
+        .menu-icon {
+            cursor: pointer;
+        }
+        .menu-icon rect:hover {
+            fill: rgba(10, 50, 100, 0.1);
+        }
+        .active rect {
+            fill: rgba(10, 50, 100, 0.1);
         }
         </style>
         </head>
         <body>
             <svg id="tree_grid" xmlns="http://www.w3.org/2000/svg">
-                <g id="elements">
-                  <defs>
-                  <marker id="triangle" viewBox="0 0 10 10" markerWidth="3"
-                          markerHeight="3" refX="5" refY="5"
+                <defs>
+                  <pattern id="grid-pat" patternUnits="userSpaceOnUse">
+                  </pattern>
+                  <marker id="triangle" viewBox="0 0 10 10" markerWidth="2"
+                          markerHeight="2" refX="5" refY="5"
                           markerUnits="strokeWidth" orient="auto">
-                  <path d="M 0 0 L 10 5 L 0 10 z" fill="white" />
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="black" />
                   </marker>
                   <marker id="dot" viewBox="0 0 10 10" refX="5" refY="5"
-                          markerUnits="strokeWidth" markerWidth="3" markerHeight="3">
-                  <circle cx="5" cy="5" r="5" fill="white" />
+                          markerUnits="strokeWidth" markerWidth="2" markerHeight="2">
+                  <circle cx="5" cy="5" r="5" fill="black" />
                   </marker>
-                  </defs>
+                </defs>
+                <rect id="grid" fill="url(#grid-pat)" />
+                <g id="tmps">
+                </g>
+                <g id="elements">
                 </g>
             </svg>
-            <script type="module" src="main.js"></script>
+            <!-- https://www.svgrepo.com/collection/calcite-sharp-line-icons/ -->
+            <svg id="menu-grid" width="50" height="300px" viewBox="0 0 50 300" xmlns="http://www.w3.org/2000/svg">
+                <svg id="normal-mode" class="menu-icon" x="0" y="10" width="50" height="50" viewBox="0 0 24 24" preserveAspectRatio="xMaxYMin">
+                    <path d="M19.813 13L7 3.65v15.812l3.345-4.584 3.106 6.152 3.94-1.981L14.359 13zm-3.764 5.604l-2.155 1.084-3.393-6.72L8 16.395V5.618L16.746 12H12.74z"/>
+                    <rect width="100%" height="100%" x="0" y="0" fill="rgba(0,0,0,0)" />
+                </svg>
+                <svg id="insert-rect" class="menu-icon" x="2" y="70" width="45px" height="45px" viewBox="0 0 24 24" preserveAspectRatio="xMaxYMin meet">
+                    <path d="M1 3h22v10h-1V4H2v16h11v1H1zm19 15v-4h-1v4h-4v.999h4V23h1v-4.001h4V18z"/>
+                    <rect width="115%" height="110%" x="-1" y="0" fill="rgba(0,0,0,0)" />
+                </svg>
+                <svg id="insert-bond" class="menu-icon" x="-8" y="125" width="50px" height="50px" viewBox="0 0 20 20" preserveAspectRatio="xMaxYMin meet">
+                    <path d="M13 5h6v6h-1V6.707L6.104 18.604l-.707-.707L17.293 6H13z"/>
+                    <rect width="110%" height="100%" x="3" y="2" fill="rgba(0,0,0,0)" />
+                </svg>
+            </svg>
+            <script src="main.js"></script>
         </body>
     </html>
