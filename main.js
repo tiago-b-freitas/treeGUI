@@ -4,9 +4,9 @@ const MAX_GRID_Y = 30;
 const GRID_SIZE = 20;
 const BOARD_SIZE_X = MAX_GRID_X * GRID_SIZE * 5;
 const BOARD_SIZE_Y = MAX_GRID_Y * GRID_SIZE * 5;
-const RECT_COLOR = '#f2f2e2';
-const RECT_COLOR_ACTIVE = '#ffffee';
-const RECT_COLOR_MOVE = '#fffff0a0';
+const OBJ_COLOR = '#f2f2e2';
+const OBJ_COLOR_ACTIVE = '#ffffee';
+const OBJ_COLOR_MOVE = '#fffff0a0';
 class Vector2 {
     x;
     y;
@@ -39,6 +39,7 @@ class Vector2 {
         return new Vector2(tmp_matrix.a, tmp_matrix.d);
     }
 }
+const OBJ_DIM = new Vector2(15 * GRID_SIZE, 6 * GRID_SIZE);
 class ElLine {
     el_key;
     el;
@@ -53,7 +54,7 @@ class ElLine {
         this.el.setAttribute('class', 'draggable');
     }
     move_to(el0, el1) {
-        if (el1 instanceof ElRect) {
+        if (el1 instanceof ElObj) {
             var [x1, y1, x2, y2] = el0.smallest_way_from_el(el1);
         }
         else if (el1 instanceof Vector2) {
@@ -80,8 +81,10 @@ class ElLine {
         this.el.setAttribute('y2', v3.y.toString());
     }
 }
-class ElRect {
+class ElObj {
     el;
+    el_rect;
+    el_text;
     el_key = -1;
     childrens;
     coords;
@@ -93,20 +96,31 @@ class ElRect {
     top_point;
     bottom_point;
     constructor(x, y, w, h) {
+        let group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         let rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        this.el = rect;
+        let text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        this.el = group;
+        this.el_rect = rect;
+        this.el_text = text;
+        this.el.appendChild(this.el_rect);
+        this.el.appendChild(this.el_text);
+        this.el_rect.setAttribute('x', '0');
+        this.el_rect.setAttribute('y', '0');
+        this.el_text.setAttribute('stroke', 'none');
+        this.el_text.textContent = 'Insira o texto aqui';
         this.coords = new Vector2(x, y);
-        this.el.setAttribute('x', this.coords.x.toString());
-        this.el.setAttribute('y', this.coords.y.toString());
         this.w = w;
-        this.el.setAttribute('width', w.toString());
+        this.el_rect.setAttribute('width', w.toString());
         this.h = h;
-        this.el.setAttribute('height', h.toString());
+        this.el_rect.setAttribute('height', h.toString());
+        this.el.setAttribute('fill', 'rgba(255, 255, 255, 0.3');
+        this.el.setAttribute('stroke', 'black');
+        this.el.classList.add('draggable');
         this.left_point = new Vector2(0, 0);
         this.right_point = new Vector2(0, 0);
         this.top_point = new Vector2(0, 0);
         this.bottom_point = new Vector2(0, 0);
-        this.start_points = this.get_start_points();
+        this.move_to(this.coords);
         this.childrens = new Map();
     }
     get_start_points() {
@@ -121,9 +135,8 @@ class ElRect {
         return [this.left_point, this.right_point, this.top_point, this.bottom_point];
     }
     move_to(coords) {
+        this.el.style.transform = `translate(${coords.x}px, ${coords.y}px)`;
         this.coords = coords;
-        this.el.setAttribute('x', this.coords.x.toString());
-        this.el.setAttribute('y', this.coords.y.toString());
         this.start_points = this.get_start_points();
     }
     smallest_way_from_el(other) {
@@ -188,7 +201,6 @@ class Pool {
         this.pool.delete(el_key);
     }
 }
-// https://dev.to/jeetvora331/throttling-in-javascript-easiest-explanation-1081
 function throttle(func, delay) {
     let timer_flag = null;
     return (...args) => {
@@ -222,7 +234,6 @@ var TypeEl;
     TypeEl[TypeEl["OBJ"] = 1] = "OBJ";
 })(TypeEl || (TypeEl = {}));
 function clean_tmps(tree_app) {
-    console.log(tree_app.tmp_element);
     if (tree_app.tmp_element !== null) {
         tree_app.pool.remove(tree_app.tmp_element, tree_app.elements);
         tree_app.tmp_element = null;
@@ -235,16 +246,11 @@ function cleaner(tree_app) {
 function set_normal_mode(tree_app) {
     var el_dragged = null;
     var is_dragging = false;
-    var offset;
+    var offset = undefined;
     cleaner(tree_app);
     const handle_mouse_move_El = throttle((e) => {
         if (is_dragging && el_dragged !== null) {
-            const el_ctm = tree_app.tree_grid.getScreenCTM();
-            if (el_ctm === null)
-                throw new Error(`Not possible to retrieve el CTM from target ${el_dragged}`);
-            const padding = new Vector2(tree_app.tree_grid.viewBox.baseVal.x, tree_app.tree_grid.viewBox.baseVal.y);
-            const coords = new Vector2(e.clientX, e.clientY).multiply(el_ctm.inverse());
-            el_dragged.move_to(coords.add(padding).sub(offset).div(GRID_SIZE).round().scale(GRID_SIZE));
+            el_dragged.move_to(get_coords(tree_app, e).sub(offset).div(GRID_SIZE).round().scale(GRID_SIZE));
         }
     }, 16.67);
     const handle_mouse_move_line = throttle((e) => {
@@ -263,40 +269,33 @@ function set_normal_mode(tree_app) {
     }, 16.67);
     const handle_mouse_over = (e) => {
         const target = e.target;
-        if (is_dragging || target === null || !target.matches('.draggable')) {
+        if (is_dragging || target === null || target.parentElement === null || !target.parentElement.matches('.draggable'))
             return;
-        }
-        target.setAttribute('fill', RECT_COLOR_ACTIVE);
+        target.parentElement.setAttribute('fill', OBJ_COLOR_ACTIVE);
     };
     const handle_mouse_out = (e) => {
         const target = e.target;
-        if (target === null || !target.matches('.draggable')) {
+        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable'))
             return;
-        }
         if (!is_dragging) {
-            target.setAttribute('fill', RECT_COLOR);
+            target.parentElement.setAttribute('fill', OBJ_COLOR);
         }
     };
     const handle_mouse_down = (e) => {
         const target = e.target;
-        if (target === null || !target.matches('.draggable')) {
+        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable'))
             return;
-        }
-        el_dragged = tree_app.pool.get_from_svg(target);
-        el_dragged.el.setAttribute('fill', RECT_COLOR_MOVE);
+        el_dragged = tree_app.pool.get_from_svg(target.parentElement);
+        el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
         is_dragging = true;
-        const screen_ctm = tree_app.tree_grid.getScreenCTM();
-        if (screen_ctm === null)
-            throw new Error(`Not possible to retrieve screen CTM from target ${target}`);
-        let coords = new Vector2(e.clientX, e.clientY).multiply(screen_ctm.inverse());
-        const padding = new Vector2(tree_app.tree_grid.viewBox.baseVal.x, tree_app.tree_grid.viewBox.baseVal.y);
-        offset = coords.add(padding).sub(el_dragged.coords);
+        offset = get_coords(tree_app, e).sub(el_dragged.coords);
     };
     const handle_mouse_up = (e) => {
         is_dragging = false;
         if (el_dragged !== null)
-            el_dragged.el.setAttribute('fill', RECT_COLOR_ACTIVE);
+            el_dragged.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
         el_dragged = null;
+        offset = undefined;
     };
     tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
     tree_app.tree_grid.addEventListener('mouseout', handle_mouse_out);
@@ -311,24 +310,28 @@ function set_normal_mode(tree_app) {
     tree_app.events.push(['mousemove', handle_mouse_move_line]);
     tree_app.events.push(['mouseup', handle_mouse_up]);
 }
-function create_rect(x, y, w, h, tree_app) {
-    const rect = new ElRect(x, y, w, h);
-    rect.el.setAttribute('fill', 'rgba(255, 255, 255, 0.3');
-    rect.el.setAttribute('stroke', 'black');
-    rect.el.classList.add('draggable');
-    rect.el_key = tree_app.pool.push(rect, tree_app.elements);
-    return rect;
+function create_obj(coords, OBJ_DIM, tree_app) {
+    const obj = new ElObj(coords.x, coords.y, OBJ_DIM.x, OBJ_DIM.y);
+    obj.el_key = tree_app.pool.push(obj, tree_app.elements);
+    const text_width = obj.el_text.getBBox().width;
+    const text_height = obj.el_text.getBBox().height;
+    obj.el_text.setAttribute('x', ((OBJ_DIM.x - text_width) / 2).toString());
+    obj.el_text.setAttribute('y', ((OBJ_DIM.y + text_height / 2) / 2).toString());
+    return obj;
 }
 function create_line(tree_app, starter_obj, points) {
     const line = new ElLine(starter_obj, points);
     line.el_key = tree_app.pool.push(line, tree_app.elements);
     return line;
 }
-function get_coords(tree_app, e) {
+function get_coords(tree_app, e, offset) {
+    if (offset === undefined) {
+        offset = new Vector2(0, 0);
+    }
     const ctm = tree_app.tree_grid.getScreenCTM();
     if (ctm === null)
         throw new Error('No possible to get screen CTM.');
-    let coords = new Vector2(e.clientX, e.clientY).multiply(ctm.inverse());
+    let coords = new Vector2(e.clientX, e.clientY).sub(offset).multiply(ctm.inverse());
     const padding = new Vector2(tree_app.tree_grid.viewBox.baseVal.x, tree_app.tree_grid.viewBox.baseVal.y);
     return coords.add(padding);
 }
@@ -339,20 +342,19 @@ function set_insert_mode_bond(tree_app) {
     cleaner(tree_app);
     const handle_mouse_over = (e) => {
         const target = e.target;
-        if (target === null || !target.matches('.draggable')) {
+        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable'))
             return;
-        }
-        if (starter_obj === null || starter_obj.el_key !== Number(target.getAttribute('el_key'))) {
-            target.setAttribute('fill', RECT_COLOR_ACTIVE);
+        if (starter_obj === null || starter_obj.el_key !== Number(target.parentElement.getAttribute('el_key'))) {
+            target.parentElement.setAttribute('fill', OBJ_COLOR_ACTIVE);
         }
     };
     const handle_mouse_down = (e, tree_app) => {
         const target = e.target;
-        if (target === null || !target.matches('.draggable')) {
+        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable')) {
             if (is_putting) {
                 is_putting = false;
                 if (starter_obj !== null) {
-                    starter_obj.el.setAttribute('fill', RECT_COLOR);
+                    starter_obj.el.setAttribute('fill', OBJ_COLOR);
                     starter_obj = null;
                 }
                 if (line !== null && line.el_key !== null) {
@@ -362,10 +364,10 @@ function set_insert_mode_bond(tree_app) {
             }
             return;
         }
-        const obj = tree_app.pool.get_from_svg(target);
+        const obj = tree_app.pool.get_from_svg(target.parentElement);
         if (is_putting && starter_obj !== null && line !== null) {
             line.move_to(starter_obj, obj);
-            starter_obj.el.setAttribute('fill', RECT_COLOR);
+            starter_obj.el.setAttribute('fill', OBJ_COLOR);
             starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
             obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
             is_putting = false;
@@ -374,7 +376,7 @@ function set_insert_mode_bond(tree_app) {
         }
         else {
             starter_obj = obj;
-            target.setAttribute('fill', RECT_COLOR_ACTIVE);
+            target.setAttribute('fill', OBJ_COLOR_ACTIVE);
             line = create_line(tree_app, starter_obj, get_coords(tree_app, e));
             is_putting = true;
         }
@@ -387,11 +389,10 @@ function set_insert_mode_bond(tree_app) {
     }, 16.67);
     const handle_mouse_out = (e) => {
         const target = e.target;
-        if (target === null || !target.matches('.draggable')) {
+        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable'))
             return;
-        }
         if (starter_obj === null || starter_obj.el_key !== Number(target.getAttribute('el_key'))) {
-            target.setAttribute('fill', RECT_COLOR);
+            target.parentElement.setAttribute('fill', OBJ_COLOR);
         }
     };
     const wrapper_mouse_down = (e) => {
@@ -409,37 +410,32 @@ function set_insert_mode_bond(tree_app) {
 function set_insert_mode_obj(tree_app) {
     let is_putting = false;
     let starter_obj = null;
-    let rect = null;
+    let obj = null;
     cleaner(tree_app);
     const handle_mouse_move = (e) => {
-        if (rect === null)
+        if (obj === null)
             return;
-        rect.move_to(get_coords(tree_app, e));
+        obj.move_to(get_coords(tree_app, e, OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE));
         is_putting = true;
     };
     const handle_mouse_over = (e) => {
-        if (rect === null) {
-            const ctm = tree_app.tree_grid.getScreenCTM();
-            if (ctm === null)
-                throw new Error('No possible to get screen CTM.');
-            let coords = new Vector2(e.clientX, e.clientY).multiply(ctm.inverse());
-            const padding = new Vector2(tree_app.tree_grid.viewBox.baseVal.x, tree_app.tree_grid.viewBox.baseVal.y);
-            coords = coords.add(padding).div(GRID_SIZE).round().scale(GRID_SIZE);
-            rect = create_rect(coords.x, coords.y, 10 * GRID_SIZE, 4 * GRID_SIZE, tree_app);
-            tree_app.tmp_element = rect.el_key;
+        if (obj === null) {
+            const coords = get_coords(tree_app, e, OBJ_DIM.div(2));
+            obj = create_obj(coords, OBJ_DIM, tree_app);
+            tree_app.tmp_element = obj.el_key;
             tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
             tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
         }
     };
-    //https://www.color-hex.com/color-palette/104059
     const handle_mouse_click = (e) => {
-        if (rect === null || !is_putting)
+        if (obj === null || !is_putting)
             return;
         tree_app.tree_grid.removeEventListener('mousemove', handle_mouse_move);
         tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
         tree_app.tmp_element = null;
-        rect.el.setAttribute('fill', RECT_COLOR);
-        rect = null;
+        obj.el.setAttribute('fill', OBJ_COLOR);
+        obj.el_text.setAttribute('fill', 'gray');
+        obj = null;
         is_putting = false;
         starter_obj = null;
     };
@@ -492,7 +488,6 @@ function initial_set_up(tree_app) {
     tree_app.tree_grid.setAttribute('width', screen_w.toString());
     tree_app.tree_grid.setAttribute('height', screen_h.toString());
     const grid_pat = document.getElementById('grid-pat');
-    //TODO
     if (grid_pat === null)
         throw new Error('');
     grid_pat.setAttribute('width', (GRID_SIZE * 2).toString());
@@ -527,28 +522,28 @@ function initial_set_up(tree_app) {
     let normal_mode_el = document.getElementById('normal-mode');
     if (normal_mode_el === null)
         throw new Error('Id "normal-mode" not found');
-    let insert_rect_el = document.getElementById('insert-rect');
-    if (insert_rect_el === null)
-        throw new Error('ID `insert-rect` is not found!');
+    let insert_obj_el = document.getElementById('insert-obj');
+    if (insert_obj_el === null)
+        throw new Error('ID `insert-obj` is not found!');
     let insert_bond_el = document.getElementById('insert-bond');
     if (insert_bond_el === null)
         throw new Error('Id "insert-bond" not found');
     normal_mode_el.addEventListener('click', (e) => {
         switch_mode(tree_app, 'NORMAL_MODE');
-        insert_rect_el.classList.remove('active');
+        insert_obj_el.classList.remove('active');
         insert_bond_el.classList.remove('active');
         normal_mode_el.classList.add('active');
     });
-    insert_rect_el.addEventListener('click', (e) => {
+    insert_obj_el.addEventListener('click', (e) => {
         switch_mode(tree_app, 'INSERT_MODE', 'OBJ');
         normal_mode_el.classList.remove('active');
         insert_bond_el.classList.remove('active');
-        insert_rect_el.classList.add('active');
+        insert_obj_el.classList.add('active');
     });
     insert_bond_el.addEventListener('click', (e) => {
         switch_mode(tree_app, 'INSERT_MODE', 'BOND');
         normal_mode_el.classList.remove('active');
-        insert_rect_el.classList.remove('active');
+        insert_obj_el.classList.remove('active');
         insert_bond_el.classList.add('active');
     });
     let w_tmp, h_tmp;

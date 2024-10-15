@@ -1,11 +1,13 @@
+// https://developer.mozilla.org/en-US/docs/Web/API/SVG_API
 const MAX_GRID_X  = 40;
 const MAX_GRID_Y  = 30;
 const GRID_SIZE   = 20;
 const BOARD_SIZE_X  = MAX_GRID_X*GRID_SIZE*5;
 const BOARD_SIZE_Y  = MAX_GRID_Y*GRID_SIZE*5;
-const RECT_COLOR = '#f2f2e2';
-const RECT_COLOR_ACTIVE = '#ffffee'
-const RECT_COLOR_MOVE = '#fffff0a0'
+//https://www.color-hex.com/color-palette/104059
+const OBJ_COLOR = '#f2f2e2';
+const OBJ_COLOR_ACTIVE = '#ffffee'
+const OBJ_COLOR_MOVE = '#fffff0a0'
 
 class Vector2 {
     x: number;
@@ -40,10 +42,12 @@ class Vector2 {
     }
 }
 
+const OBJ_DIM = new Vector2(15*GRID_SIZE, 6*GRID_SIZE);
+
 class ElLine {
     el_key: ElKey;
     el: SVGLineElement;
-    constructor(el0: Obj, el1: Obj | Vector2) {
+    constructor(el0: ElObj, el1: ElObj | Vector2) {
         this.el_key = null;
         this.el = (document.createElementNS('http://www.w3.org/2000/svg', 'line'));
         this.move_to(el0, el1);
@@ -55,8 +59,8 @@ class ElLine {
 
 
     }
-    public move_to(el0: Obj, el1: Obj | Vector2): void {
-        if (el1 instanceof ElRect) {
+    public move_to(el0: ElObj, el1: ElObj | Vector2): void {
+        if (el1 instanceof ElObj) {
             var [x1, y1, x2, y2] = el0.smallest_way_from_el(el1);
         } else if (el1 instanceof Vector2) {
             var [x1, y1, x2, y2] = el0.smallest_way_from_points(el1);
@@ -68,7 +72,7 @@ class ElLine {
         this.el.setAttribute('x2', x2.toString());
         this.el.setAttribute('y2', y2.toString());
     }
-    public move_to_insert_mode(el0: Obj, el1: Vector2, length: number): void {
+    public move_to_insert_mode(el0: ElObj, el1: Vector2, length: number): void {
         var [x1, y1, x2, y2] = el0.smallest_way_from_points(el1);
         let v1 = new Vector2(x1, y1);
         let v2 = new Vector2(x2, y2);
@@ -82,8 +86,10 @@ class ElLine {
     }
 }
 
-class ElRect {
-    el: SVGRectElement;
+class ElObj {
+    el: SVGGElement;
+    el_rect: SVGRectElement;
+    el_text: SVGTextElement;
     el_key: ElKey = -1;
     childrens: Map<ElKey, [LineType, ElKey | null]>;
     public coords: Vector2; 
@@ -95,22 +101,37 @@ class ElRect {
     private top_point: Vector2;
     private bottom_point: Vector2;
     constructor(x: number, y: number, w: number, h: number) {
+        let group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         let rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        this.el = rect;
+        let text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        this.el = group;
+        this.el_rect = rect;
+        this.el_text = text;
+        this.el.appendChild(this.el_rect);
+        this.el.appendChild(this.el_text);
+
+        this.el_rect.setAttribute('x', '0');
+        this.el_rect.setAttribute('y', '0');
+
+        // https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML
+        this.el_text.setAttribute('stroke', 'none');
+        this.el_text.textContent = 'Insira o texto aqui';
 
         this.coords = new Vector2(x, y);
-        this.el.setAttribute('x', this.coords.x.toString());
-        this.el.setAttribute('y', this.coords.y.toString());
         this.w = w;
-        this.el.setAttribute('width', w.toString());
+        this.el_rect.setAttribute('width', w.toString());
         this.h = h;
-        this.el.setAttribute('height', h.toString());
+        this.el_rect.setAttribute('height', h.toString());
+        
+        this.el.setAttribute('fill', 'rgba(255, 255, 255, 0.3');
+        this.el.setAttribute('stroke', 'black');
+        this.el.classList.add('draggable');
 
         this.left_point   = new Vector2(0, 0);
         this.right_point  = new Vector2(0, 0);
         this.top_point    = new Vector2(0, 0);
         this.bottom_point = new Vector2(0, 0);
-        this.start_points = this.get_start_points();
+        this.move_to(this.coords);
 
         this.childrens = new Map();
     }
@@ -130,12 +151,11 @@ class ElRect {
         return [this.left_point, this.right_point, this.top_point, this.bottom_point];
     }
     public move_to(coords: Vector2): void {
+        this.el.style.transform = `translate(${coords.x}px, ${coords.y}px)`;
         this.coords = coords;
-        this.el.setAttribute('x', this.coords.x.toString());
-        this.el.setAttribute('y', this.coords.y.toString());
         this.start_points = this.get_start_points();
     }
-    public smallest_way_from_el(other: ElRect): Vector4 {
+    public smallest_way_from_el(other: ElObj): Vector4 {
         var min = Infinity;
         var smallest_v: Vector4 | null = null;
         for (const v0 of this.start_points) {
@@ -185,7 +205,7 @@ class Pool {
         if (el === undefined) throw new Error(`El_key ${el_key} not found in pool ${this.pool}`);
         return el;
     }
-    public get_from_svg(el_svg: SVGElement): El {
+    public get_from_svg(el_svg: SVGElement | HTMLElement): El {
         const el_key = Number(el_svg.getAttribute('el_key'));
         return this.get(el_key);
     }
@@ -232,7 +252,7 @@ enum TypeEl {
     OBJ,
 }
 
-type Obj = ElRect;
+type Obj = ElObj;
 type Bond = ElLine;
 type El = Obj | Bond;
 type ModeStrings = keyof typeof Mode;
@@ -255,7 +275,6 @@ type Vector4 = [number, number, number, number];
 type StartPoints = [Vector2, Vector2, Vector2, Vector2];
 
 function clean_tmps(tree_app: TreeApp): void {
-    console.log(tree_app.tmp_element);
     if (tree_app.tmp_element !== null) {
         tree_app.pool.remove(tree_app.tmp_element, tree_app.elements);
         tree_app.tmp_element = null;
@@ -268,20 +287,15 @@ function cleaner(tree_app: TreeApp): void {
 }
 
 function set_normal_mode(tree_app: TreeApp): void {
-    var el_dragged: ElRect | null = null;
+    var el_dragged: ElObj | null = null;
     var is_dragging: boolean = false;
-    var offset: Vector2;
-
+    var offset: Vector2 | undefined = undefined;
 
     cleaner(tree_app);
 
     const handle_mouse_move_El = throttle((e: MouseEvent) => {
         if (is_dragging && el_dragged !== null) {
-            const el_ctm = tree_app.tree_grid.getScreenCTM();
-            if (el_ctm === null) throw new Error(`Not possible to retrieve el CTM from target ${el_dragged}`);
-            const padding = new Vector2(tree_app.tree_grid.viewBox.baseVal.x, tree_app.tree_grid.viewBox.baseVal.y);
-            const coords = new Vector2(e.clientX, e.clientY).multiply(el_ctm.inverse())
-            el_dragged.move_to(coords.add(padding).sub(offset).div(GRID_SIZE).round().scale(GRID_SIZE));
+            el_dragged.move_to(get_coords(tree_app, e).sub(offset as Vector2).div(GRID_SIZE).round().scale(GRID_SIZE));
         }
     }, 16.67);
 
@@ -289,7 +303,7 @@ function set_normal_mode(tree_app: TreeApp): void {
         if (is_dragging && el_dragged !== null) {
             for (const [line_key, [line_type, other_el_key]] of el_dragged.childrens) {
                 const line = tree_app.pool.get(line_key) as ElLine;
-                const other_el = tree_app.pool.get(other_el_key as ElKey) as ElRect;
+                const other_el = tree_app.pool.get(other_el_key as ElKey) as ElObj;
                 if (line_type === 's') {
                     line.move_to(el_dragged, other_el); 
                 } else if (line_type === 'e') {
@@ -301,41 +315,35 @@ function set_normal_mode(tree_app: TreeApp): void {
 
     const handle_mouse_over = (e: MouseEvent) => {
         const target = e.target as SVGElement;
-        if (is_dragging || target === null || !target.matches('.draggable')) {
-            return;
-        }
-        target.setAttribute('fill', RECT_COLOR_ACTIVE);
+        if (is_dragging || target === null || target.parentElement === null || !target.parentElement.matches('.draggable')) return;
+
+        target.parentElement.setAttribute('fill', OBJ_COLOR_ACTIVE);
     };
 
     const handle_mouse_out = (e: MouseEvent) => {
         const target = e.target as SVGElement;
-        if (target === null || !target.matches('.draggable')) {
-            return;
-        }
+        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable')) return;
+
         if (!is_dragging) {
-            target.setAttribute('fill', RECT_COLOR);
+            target.parentElement.setAttribute('fill', OBJ_COLOR);
         }
     };
 
     const handle_mouse_down = (e: MouseEvent) => {
-        const target = e.target as SVGSVGElement;
-        if (target === null || !target.matches('.draggable')) {
-            return;
-        }
-        el_dragged = tree_app.pool.get_from_svg(target) as ElRect;
-        el_dragged.el.setAttribute('fill', RECT_COLOR_MOVE);
+        const target = e.target as SVGElement;
+        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable')) return;
+
+        el_dragged = tree_app.pool.get_from_svg(target.parentElement) as ElObj;
+        el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
         is_dragging = true;
-        const screen_ctm = tree_app.tree_grid.getScreenCTM();
-        if (screen_ctm === null) throw new Error(`Not possible to retrieve screen CTM from target ${target}`);
-        let coords = new Vector2(e.clientX, e.clientY).multiply(screen_ctm.inverse())
-        const padding = new Vector2(tree_app.tree_grid.viewBox.baseVal.x, tree_app.tree_grid.viewBox.baseVal.y);
-        offset = coords.add(padding).sub(el_dragged.coords);
+        offset = get_coords(tree_app, e).sub(el_dragged.coords);
     };
 
     const handle_mouse_up = (e: MouseEvent) => {
         is_dragging = false;
-        if (el_dragged !== null) el_dragged.el.setAttribute('fill', RECT_COLOR_ACTIVE);
+        if (el_dragged !== null) el_dragged.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
         el_dragged = null;
+        offset = undefined;
     };
 
     tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
@@ -354,13 +362,15 @@ function set_normal_mode(tree_app: TreeApp): void {
 }
 
 
-function create_rect(x: number, y: number, w: number, h: number, tree_app: TreeApp): ElRect {
-    const rect = new ElRect(x, y, w, h);
-    rect.el.setAttribute('fill', 'rgba(255, 255, 255, 0.3');
-    rect.el.setAttribute('stroke', 'black');
-    rect.el.classList.add('draggable');
-    rect.el_key = tree_app.pool.push(rect, tree_app.elements);
-    return rect;
+function create_obj(coords: Vector2, OBJ_DIM: Vector2, tree_app: TreeApp): ElObj {
+    const obj = new ElObj(coords.x, coords.y, OBJ_DIM.x, OBJ_DIM.y);
+    obj.el_key = tree_app.pool.push(obj, tree_app.elements);
+    const text_width = obj.el_text.getBBox().width;
+    const text_height = obj.el_text.getBBox().height;
+    obj.el_text.setAttribute('x', ((OBJ_DIM.x-text_width)/2).toString());
+    obj.el_text.setAttribute('y', ((OBJ_DIM.y+text_height/2)/2).toString());
+
+    return obj;
 }
 
 function create_line(tree_app: TreeApp, starter_obj: Obj, points: Vector2): ElLine {
@@ -369,16 +379,19 @@ function create_line(tree_app: TreeApp, starter_obj: Obj, points: Vector2): ElLi
     return line;
 }
 
-function get_coords(tree_app: TreeApp, e: MouseEvent): Vector2 {
+function get_coords(tree_app: TreeApp, e: MouseEvent, offset?: Vector2 | undefined): Vector2 {
+    if (offset === undefined) {
+        offset = new Vector2(0, 0);
+    }
     const ctm = tree_app.tree_grid.getScreenCTM();
     if (ctm === null) throw new Error('No possible to get screen CTM.');
-    let coords = new Vector2(e.clientX, e.clientY).multiply(ctm.inverse())
+    let coords = new Vector2(e.clientX, e.clientY).sub(offset).multiply(ctm.inverse())
     const padding = new Vector2(tree_app.tree_grid.viewBox.baseVal.x, tree_app.tree_grid.viewBox.baseVal.y);
     return coords.add(padding);
 }
 
 function set_insert_mode_bond(tree_app: TreeApp): void {
-    var starter_obj: Obj | null = null;
+    var starter_obj: ElObj | null = null;
     var line: ElLine | null = null;
     var is_putting: boolean = false;
 
@@ -386,21 +399,20 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
 
     const handle_mouse_over = (e: MouseEvent) => {
         const target = e.target as SVGElement;
-        if (target === null || !target.matches('.draggable')) {
-            return;
-        }
-        if (starter_obj === null || starter_obj.el_key !== Number(target.getAttribute('el_key'))) {
-            target.setAttribute('fill', RECT_COLOR_ACTIVE);
+        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable')) return;
+
+        if (starter_obj === null || starter_obj.el_key !== Number(target.parentElement.getAttribute('el_key'))) {
+            target.parentElement.setAttribute('fill', OBJ_COLOR_ACTIVE);
         }
     };
 
     const handle_mouse_down = (e: MouseEvent, tree_app: TreeApp) => {
         const target = e.target as SVGElement;
-        if (target === null || !target.matches('.draggable')) {
+        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable')) {
             if (is_putting) {
                 is_putting = false;
                 if (starter_obj !== null) {
-                    starter_obj.el.setAttribute('fill', RECT_COLOR);
+                    starter_obj.el.setAttribute('fill', OBJ_COLOR);
                     starter_obj = null;
                 }
                 if (line !== null && line.el_key !== null) {
@@ -410,10 +422,10 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
             }
             return;
         }
-        const obj = tree_app.pool.get_from_svg(target) as Obj;
+        const obj = tree_app.pool.get_from_svg(target.parentElement) as ElObj;
         if (is_putting && starter_obj !== null && line !== null) {
-            line.move_to(starter_obj as Obj, obj);
-            starter_obj.el.setAttribute('fill', RECT_COLOR);
+            line.move_to(starter_obj as ElObj, obj);
+            starter_obj.el.setAttribute('fill', OBJ_COLOR);
             starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
             obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
             is_putting = false;
@@ -421,8 +433,8 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
             line = null;
         } else {
             starter_obj = obj;
-            target.setAttribute('fill', RECT_COLOR_ACTIVE);
-            line = create_line(tree_app, starter_obj as Obj, get_coords(tree_app, e));
+            target.setAttribute('fill', OBJ_COLOR_ACTIVE);
+            line = create_line(tree_app, starter_obj as ElObj, get_coords(tree_app, e));
             is_putting = true;
         }
     };
@@ -436,11 +448,10 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
 
     const handle_mouse_out = (e: MouseEvent) => {
         const target = e.target as SVGElement;
-        if (target === null || !target.matches('.draggable')) {
-            return;
-        }
+        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable')) return;
+
         if (starter_obj === null || starter_obj.el_key !== Number(target.getAttribute('el_key'))) {
-            target.setAttribute('fill', RECT_COLOR);
+            target.parentElement.setAttribute('fill', OBJ_COLOR);
         }
     };
 
@@ -459,42 +470,37 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
     tree_app.events.push(['mousedown', wrapper_mouse_down]);
 }
 
-
 function set_insert_mode_obj(tree_app: TreeApp) {
     let is_putting: boolean = false;
-    let starter_obj: Obj | null = null;
-    let rect: ElRect | null = null;
+    let starter_obj: ElObj | null = null;
+    let obj: ElObj | null = null;
 
     cleaner(tree_app);
 
     const handle_mouse_move = (e: MouseEvent) => {
-        if (rect === null) return;
-        rect.move_to(get_coords(tree_app, e));
+        if (obj === null) return;
+        obj.move_to(get_coords(tree_app, e, OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE));
         is_putting = true;
     };
 
     const handle_mouse_over = (e: MouseEvent) => {
-        if (rect === null) {
-            const ctm = tree_app.tree_grid.getScreenCTM();
-            if (ctm === null) throw new Error('No possible to get screen CTM.');
-            let coords = new Vector2(e.clientX, e.clientY).multiply(ctm.inverse())
-            const padding = new Vector2(tree_app.tree_grid.viewBox.baseVal.x, tree_app.tree_grid.viewBox.baseVal.y);
-            coords = coords.add(padding).div(GRID_SIZE).round().scale(GRID_SIZE);
-            rect = create_rect(coords.x, coords.y, 10*GRID_SIZE, 4*GRID_SIZE, tree_app);
-            tree_app.tmp_element = rect.el_key;
+        if (obj === null) {
+            const coords = get_coords(tree_app, e, OBJ_DIM.div(2));
+            obj = create_obj(coords, OBJ_DIM, tree_app);
+            tree_app.tmp_element = obj.el_key;
             tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
             tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
         }
     };
 
-    //https://www.color-hex.com/color-palette/104059
     const handle_mouse_click = (e: MouseEvent) => {
-        if (rect === null || !is_putting) return;
+        if (obj === null || !is_putting) return;
         tree_app.tree_grid.removeEventListener('mousemove', handle_mouse_move);
         tree_app.tree_grid.addEventListener('mouseover',  handle_mouse_over);
         tree_app.tmp_element = null;
-        rect.el.setAttribute('fill', RECT_COLOR);
-        rect = null;
+        obj.el.setAttribute('fill', OBJ_COLOR);
+        obj.el_text.setAttribute('fill', 'gray');
+        obj = null;
         is_putting = false;
         starter_obj = null;
     };
@@ -585,29 +591,29 @@ function initial_set_up(tree_app: TreeApp): void {
 
     let normal_mode_el = document.getElementById('normal-mode')
     if (normal_mode_el === null) throw new Error('Id "normal-mode" not found');
-    let insert_rect_el = document.getElementById('insert-rect')
-    if (insert_rect_el === null) throw new Error('ID `insert-rect` is not found!');
+    let insert_obj_el = document.getElementById('insert-obj')
+    if (insert_obj_el === null) throw new Error('ID `insert-obj` is not found!');
     let insert_bond_el = document.getElementById('insert-bond')
     if (insert_bond_el === null) throw new Error('Id "insert-bond" not found');
 
     normal_mode_el.addEventListener('click', (e) => {
         switch_mode(tree_app, 'NORMAL_MODE');
-        insert_rect_el.classList.remove('active')
+        insert_obj_el.classList.remove('active')
         insert_bond_el.classList.remove('active')
         normal_mode_el.classList.add('active')
     });
 
-    insert_rect_el.addEventListener('click', (e) => {
+    insert_obj_el.addEventListener('click', (e) => {
         switch_mode(tree_app, 'INSERT_MODE', 'OBJ');
         normal_mode_el.classList.remove('active')
         insert_bond_el.classList.remove('active')
-        insert_rect_el.classList.add('active')
+        insert_obj_el.classList.add('active')
     });
 
     insert_bond_el.addEventListener('click', (e) => {
         switch_mode(tree_app, 'INSERT_MODE', 'BOND');
         normal_mode_el.classList.remove('active')
-        insert_rect_el.classList.remove('active')
+        insert_obj_el.classList.remove('active')
         insert_bond_el.classList.add('active')
     });
 
