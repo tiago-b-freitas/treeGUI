@@ -5,96 +5,7 @@
         <meta name="viewport" content="width=device-width" />
         <title>Árvore de problemas</title>
         <link rel="icon" type="image/x-icon" href="favicon.ico">
-    <style>
-        /* http://meyerweb.com/eric/tools/css/reset/
-         v2.0 | 20110126
-         License: none (public domain)
-        */
-
-        html, body, div, span, applet, object, iframe,
-        h1, h2, h3, h4, h5, h6, p, blockquote, pre,
-        a, abbr, acronym, address, big, cite, code,
-        del, dfn, em, img, ins, kbd, q, s, samp,
-        small, strike, strong, sub, sup, tt, var,
-        b, u, i, center,
-        dl, dt, dd, ol, ul, li,
-        fieldset, form, label, legend,
-        table, caption, tbody, tfoot, thead, tr, th, td,
-        article, aside, canvas, details, embed,
-        figure, figcaption, footer, header, hgroup,
-        menu, nav, output, ruby, section, summary,
-        time, mark, audio, video {
-            margin: 0;
-            padding: 0;
-            border: 0;
-            font-size: 100%;
-            font: inherit;
-            vertical-align: baseline;
-        }
-        /* HTML5 display-role reset for older browsers */
-        article, aside, details, figcaption, figure,
-        footer, header, hgroup, menu, nav, section {
-            display: block;
-        }
-        body {
-            line-height: 1;
-        }
-        ol, ul {
-            list-style: none;
-        }
-        blockquote, q {
-            quotes: none;
-        }
-        blockquote:before, blockquote:after,
-        q:before, q:after {
-            content: '';
-            content: none;
-        }
-        table {
-            border-collapse: collapse;
-            border-spacing: 0;
-        }
-        /* end reset.css */
-
-        html, body {
-          width: 100%;
-          height: 100%;
-          background-color: #181818;
-        }
-        body {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          resize: both;
-          overflow: auto;
-        }
-        svg {
-          background-color: white;
-          resize: both;
-          overflow: auto;
-        }
-        .draggable {
-          filter: drop-shadow(rgba(0, 0, 0, 0.7) 3px 3px 2px);
-          cursor: pointer;
-        }
-        #menu-grid {
-            border: 2px solid hsla(0, 0%, 0%, 0.5);
-            position: fixed;
-            left: 10px;
-        }
-        image {
-            draggable="false";
-        }
-        .menu-icon {
-            cursor: pointer;
-        }
-        .menu-icon rect:hover {
-            fill: rgba(10, 50, 100, 0.1);
-        }
-        .active rect {
-            fill: rgba(10, 50, 100, 0.1);
-        }
-        </style>
+        <link rel="stylesheet" href="style.css">
         </head>
         <body>
             <svg id="tree_grid" xmlns="http://www.w3.org/2000/svg">
@@ -123,7 +34,7 @@
                     <path d="M19.813 13L7 3.65v15.812l3.345-4.584 3.106 6.152 3.94-1.981L14.359 13zm-3.764 5.604l-2.155 1.084-3.393-6.72L8 16.395V5.618L16.746 12H12.74z"/>
                     <rect width="100%" height="100%" x="0" y="0" fill="rgba(0,0,0,0)" />
                 </svg>
-                <svg id="insert-rect" class="menu-icon" x="2" y="70" width="45px" height="45px" viewBox="0 0 24 24" preserveAspectRatio="xMaxYMin meet">
+                <svg id="insert-obj" class="menu-icon" x="2" y="70" width="45px" height="45px" viewBox="0 0 24 24" preserveAspectRatio="xMaxYMin meet">
                     <path d="M1 3h22v10h-1V4H2v16h11v1H1zm19 15v-4h-1v4h-4v.999h4V23h1v-4.001h4V18z"/>
                     <rect width="115%" height="110%" x="-1" y="0" fill="rgba(0,0,0,0)" />
                 </svg>
