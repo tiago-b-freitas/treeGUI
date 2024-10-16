@@ -7,6 +7,8 @@ const BOARD_SIZE_Y = MAX_GRID_Y * GRID_SIZE * 5;
 const OBJ_COLOR = '#f2f2e2';
 const OBJ_COLOR_ACTIVE = '#ffffee';
 const OBJ_COLOR_MOVE = '#fffff0a0';
+const SCALE_FACTOR = 1.5;
+const STD_TEXT = 'Insira o texto aqui';
 class Vector2 {
     x;
     y;
@@ -15,6 +17,9 @@ class Vector2 {
         this.matrix = new DOMMatrixReadOnly([x, 0, 0, y, 0, 0]);
         this.x = x;
         this.y = y;
+    }
+    static zero() {
+        return new Vector2(0, 0);
     }
     len(other) {
         return Math.sqrt((this.x - other.x) ** 2 + (this.y - other.y) ** 2);
@@ -51,7 +56,7 @@ class ElLine {
         this.el.setAttribute('stroke-width', '7');
         this.el.setAttribute('marker-start', 'url(#dot)');
         this.el.setAttribute('marker-end', 'url(#triangle)');
-        this.el.setAttribute('class', 'draggable');
+        this.el.classList.add('draggable');
     }
     move_to(el0, el1) {
         if (el1 instanceof ElObj) {
@@ -85,6 +90,7 @@ class ElObj {
     el;
     el_rect;
     el_text;
+    has_text;
     el_key = -1;
     childrens;
     coords;
@@ -107,7 +113,8 @@ class ElObj {
         this.el_rect.setAttribute('x', '0');
         this.el_rect.setAttribute('y', '0');
         this.el_text.setAttribute('stroke', 'none');
-        this.el_text.textContent = 'Insira o texto aqui';
+        this.el_text.textContent = STD_TEXT;
+        this.has_text = false;
         this.coords = new Vector2(x, y);
         this.w = w;
         this.el_rect.setAttribute('width', w.toString());
@@ -116,10 +123,12 @@ class ElObj {
         this.el.setAttribute('fill', 'rgba(255, 255, 255, 0.3');
         this.el.setAttribute('stroke', 'black');
         this.el.classList.add('draggable');
-        this.left_point = new Vector2(0, 0);
-        this.right_point = new Vector2(0, 0);
-        this.top_point = new Vector2(0, 0);
-        this.bottom_point = new Vector2(0, 0);
+        this.el.classList.add('obj');
+        this.left_point = Vector2.zero();
+        this.right_point = Vector2.zero();
+        this.top_point = Vector2.zero();
+        this.bottom_point = Vector2.zero();
+        this.start_points = [this.left_point, this.right_point, this.top_point, this.bottom_point];
         this.move_to(this.coords);
         this.childrens = new Map();
     }
@@ -168,6 +177,12 @@ class ElObj {
         if (smallest_v === null)
             throw new Error('Is not possible to established the best way');
         return smallest_v;
+    }
+    is_outside(e_coords) {
+        return e_coords.x < this.coords.x
+            || e_coords.x > this.coords.x + this.w
+            || e_coords.y < this.coords.y
+            || e_coords.y > this.coords.y + this.h;
     }
 }
 class Pool {
@@ -230,8 +245,10 @@ var Mode;
 })(Mode || (Mode = {}));
 var TypeEl;
 (function (TypeEl) {
-    TypeEl[TypeEl["BOND"] = 0] = "BOND";
-    TypeEl[TypeEl["OBJ"] = 1] = "OBJ";
+    TypeEl[TypeEl["OBJ"] = 0] = "OBJ";
+    TypeEl[TypeEl["TEXT"] = 1] = "TEXT";
+    TypeEl[TypeEl["BOND"] = 2] = "BOND";
+    TypeEl[TypeEl["UNDEFINIED"] = -1] = "UNDEFINIED";
 })(TypeEl || (TypeEl = {}));
 function clean_tmps(tree_app) {
     if (tree_app.tmp_element !== null) {
@@ -310,13 +327,16 @@ function set_normal_mode(tree_app) {
     tree_app.events.push(['mousemove', handle_mouse_move_line]);
     tree_app.events.push(['mouseup', handle_mouse_up]);
 }
+function centralize_text(el_text) {
+    const text_width = el_text.getBBox().width;
+    const text_height = el_text.getBBox().height;
+    el_text.setAttribute('x', ((OBJ_DIM.x - text_width) / 2).toString());
+    el_text.setAttribute('y', ((OBJ_DIM.y + text_height / 2) / 2).toString());
+}
 function create_obj(coords, OBJ_DIM, tree_app) {
     const obj = new ElObj(coords.x, coords.y, OBJ_DIM.x, OBJ_DIM.y);
     obj.el_key = tree_app.pool.push(obj, tree_app.elements);
-    const text_width = obj.el_text.getBBox().width;
-    const text_height = obj.el_text.getBBox().height;
-    obj.el_text.setAttribute('x', ((OBJ_DIM.x - text_width) / 2).toString());
-    obj.el_text.setAttribute('y', ((OBJ_DIM.y + text_height / 2) / 2).toString());
+    centralize_text(obj.el_text);
     return obj;
 }
 function create_line(tree_app, starter_obj, points) {
@@ -324,21 +344,18 @@ function create_line(tree_app, starter_obj, points) {
     line.el_key = tree_app.pool.push(line, tree_app.elements);
     return line;
 }
-function get_coords(tree_app, e, offset) {
-    if (offset === undefined) {
-        offset = new Vector2(0, 0);
-    }
+function get_coords(tree_app, e) {
     const ctm = tree_app.tree_grid.getScreenCTM();
     if (ctm === null)
         throw new Error('No possible to get screen CTM.');
-    let coords = new Vector2(e.clientX, e.clientY).sub(offset).multiply(ctm.inverse());
+    let coords = new Vector2(e.clientX, e.clientY).multiply(ctm.inverse());
     const padding = new Vector2(tree_app.tree_grid.viewBox.baseVal.x, tree_app.tree_grid.viewBox.baseVal.y);
     return coords.add(padding);
 }
 function set_insert_mode_bond(tree_app) {
-    var starter_obj = null;
-    var line = null;
-    var is_putting = false;
+    let starter_obj = null;
+    let line = null;
+    let is_putting = false;
     cleaner(tree_app);
     const handle_mouse_over = (e) => {
         const target = e.target;
@@ -359,6 +376,7 @@ function set_insert_mode_bond(tree_app) {
                 }
                 if (line !== null && line.el_key !== null) {
                     tree_app.pool.remove(line.el_key, tree_app.elements);
+                    tree_app.tmp_element = null;
                     line = null;
                 }
             }
@@ -368,16 +386,19 @@ function set_insert_mode_bond(tree_app) {
         if (is_putting && starter_obj !== null && line !== null) {
             line.move_to(starter_obj, obj);
             starter_obj.el.setAttribute('fill', OBJ_COLOR);
+            obj.el.setAttribute('fill', OBJ_COLOR);
             starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
             obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
+            tree_app.tmp_element = null;
             is_putting = false;
             starter_obj = null;
             line = null;
         }
         else {
             starter_obj = obj;
-            target.setAttribute('fill', OBJ_COLOR_ACTIVE);
+            starter_obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
             line = create_line(tree_app, starter_obj, get_coords(tree_app, e));
+            tree_app.tmp_element = line.el_key;
             is_putting = true;
         }
     };
@@ -391,7 +412,7 @@ function set_insert_mode_bond(tree_app) {
         const target = e.target;
         if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable'))
             return;
-        if (starter_obj === null || starter_obj.el_key !== Number(target.getAttribute('el_key'))) {
+        if (starter_obj === null || starter_obj.el_key !== Number(target.parentElement.getAttribute('el_key'))) {
             target.parentElement.setAttribute('fill', OBJ_COLOR);
         }
     };
@@ -415,12 +436,12 @@ function set_insert_mode_obj(tree_app) {
     const handle_mouse_move = (e) => {
         if (obj === null)
             return;
-        obj.move_to(get_coords(tree_app, e, OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE));
+        obj.move_to(get_coords(tree_app, e).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE));
         is_putting = true;
     };
     const handle_mouse_over = (e) => {
         if (obj === null) {
-            const coords = get_coords(tree_app, e, OBJ_DIM.div(2));
+            const coords = get_coords(tree_app, e).sub(OBJ_DIM.div(2));
             obj = create_obj(coords, OBJ_DIM, tree_app);
             tree_app.tmp_element = obj.el_key;
             tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
@@ -445,11 +466,108 @@ function set_insert_mode_obj(tree_app) {
     tree_app.events.push(['click', handle_mouse_click]);
     tree_app.events.push(['mousemove', handle_mouse_move]);
 }
+function set_insert_mode_text(tree_app) {
+    let is_inserting = false;
+    let foreignObj = null;
+    let inputObj = null;
+    let obj = null;
+    cleaner(tree_app);
+    document.getElementsByTagName('body')[0].style.cursor = 'text';
+    const handle_mouse_over = (e) => {
+        const target = e.target;
+        if (obj === null && target !== null && target.parentElement !== null) {
+            target.parentElement.setAttribute('fill', OBJ_COLOR_ACTIVE);
+            if (target.parentElement.matches('.obj') && inputObj === null) {
+                foreignObj = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+                foreignObj.setAttribute('x', '0');
+                foreignObj.setAttribute('y', '0');
+                foreignObj.setAttribute('width', (OBJ_DIM.x).toString());
+                foreignObj.setAttribute('height', (OBJ_DIM.y).toString());
+                inputObj = document.createElement('div');
+                inputObj.contentEditable = 'true';
+                inputObj.style.wordWrap = 'break-word';
+                inputObj.style.wordBreak = 'break-word';
+                inputObj.style.width = `${(OBJ_DIM.x - 20)}px`;
+                inputObj.style.height = `${(OBJ_DIM.y - 20)}px`;
+                inputObj.style.position = 'relative';
+                inputObj.style.top = '8px';
+                inputObj.style.left = '8px';
+                inputObj.style.border = '2px dashed cadetblue';
+                foreignObj.appendChild(inputObj);
+                obj = tree_app.pool.get_from_svg(target.parentElement);
+                obj.el.appendChild(foreignObj);
+            }
+        }
+        if (!is_inserting && obj !== null && obj.is_outside(get_coords(tree_app, e))) {
+            obj.el.setAttribute('fill', OBJ_COLOR);
+            obj.el.removeChild(foreignObj);
+            inputObj = null;
+            foreignObj = null;
+            obj = null;
+        }
+    };
+    const handle_mouse_down = (e) => {
+        if (obj === null || inputObj === null)
+            return;
+        if (!is_inserting) {
+            if (obj.has_text) {
+                inputObj.textContent = obj.el_text.textContent;
+            }
+            obj.el_text.textContent = '';
+            inputObj.style.border = '';
+            inputObj.style.padding = '2px';
+            is_inserting = true;
+        }
+        else if (obj.is_outside(get_coords(tree_app, e))) {
+            if (inputObj.textContent) {
+                obj.el_text.textContent = inputObj.textContent;
+                obj.el_text.style.fill = 'black';
+                obj.has_text = true;
+            }
+            else {
+                obj.el_text.textContent = STD_TEXT;
+                obj.el_text.style.fill = 'gray';
+                obj.has_text = false;
+            }
+            centralize_text(obj.el_text);
+            obj.el.removeChild(foreignObj);
+            inputObj = null;
+            foreignObj = null;
+            is_inserting = false;
+            obj = null;
+        }
+    };
+    tree_app.tree_grid.addEventListener('keyup', (e) => {
+        if (e.code === 'Enter' && obj !== null && inputObj !== null) {
+            if (inputObj.textContent) {
+                obj.el_text.textContent = inputObj.textContent;
+                obj.el_text.style.fill = 'black';
+                obj.has_text = true;
+            }
+            else {
+                obj.el_text.textContent = STD_TEXT;
+                obj.el_text.style.fill = 'gray';
+                obj.has_text = false;
+            }
+            centralize_text(obj.el_text);
+            obj.el.removeChild(foreignObj);
+            inputObj = null;
+            foreignObj = null;
+            is_inserting = false;
+            obj = null;
+        }
+    });
+    tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
+    tree_app.tree_grid.addEventListener('mousedown', handle_mouse_down);
+    tree_app.events.push(['mouseover', handle_mouse_over]);
+    tree_app.events.push(['mousedown', handle_mouse_down]);
+}
 function switch_mode(tree_app, mode, type_el) {
     if (Mode[mode] === Mode[tree_app.current_mode] && type_el === tree_app.current_type_el) {
         return;
     }
     console.log(`Switching to ${mode}.`);
+    document.getElementsByTagName('body')[0].style.cursor = 'default';
     tree_app.current_mode = mode;
     tree_app.current_type_el = type_el;
     switch (Mode[mode]) {
@@ -469,6 +587,12 @@ function switch_mode(tree_app, mode, type_el) {
                     break;
                 case TypeEl.OBJ:
                     set_insert_mode_obj(tree_app);
+                    break;
+                case TypeEl.TEXT:
+                    set_insert_mode_text(tree_app);
+                    break;
+                case TypeEl.UNDEFINIED:
+                    throw new Error('The type of element is undefined');
                     break;
                 default:
                     throw new Error(`The type of element ${type_el} is not know!`);
@@ -519,83 +643,34 @@ function initial_set_up(tree_app) {
             menu_grid.style.top = ((screen_h - Number(menu_grid.getAttribute('height'))) / 2).toString();
         }
     });
-    let normal_mode_el = document.getElementById('normal-mode');
+    const normal_mode_el = document.getElementById('normal-mode');
     if (normal_mode_el === null)
         throw new Error('Id "normal-mode" not found');
-    let insert_obj_el = document.getElementById('insert-obj');
+    const insert_obj_el = document.getElementById('insert-obj');
     if (insert_obj_el === null)
         throw new Error('ID `insert-obj` is not found!');
-    let insert_bond_el = document.getElementById('insert-bond');
+    const insert_text_el = document.getElementById('insert-text');
+    if (insert_text_el === null)
+        throw new Error('ID `insert-text` is not found!');
+    const insert_bond_el = document.getElementById('insert-bond');
     if (insert_bond_el === null)
         throw new Error('Id "insert-bond" not found');
-    normal_mode_el.addEventListener('click', (e) => {
-        switch_mode(tree_app, 'NORMAL_MODE');
-        insert_obj_el.classList.remove('active');
-        insert_bond_el.classList.remove('active');
-        normal_mode_el.classList.add('active');
-    });
-    insert_obj_el.addEventListener('click', (e) => {
-        switch_mode(tree_app, 'INSERT_MODE', 'OBJ');
-        normal_mode_el.classList.remove('active');
-        insert_bond_el.classList.remove('active');
-        insert_obj_el.classList.add('active');
-    });
-    insert_bond_el.addEventListener('click', (e) => {
-        switch_mode(tree_app, 'INSERT_MODE', 'BOND');
-        normal_mode_el.classList.remove('active');
-        insert_obj_el.classList.remove('active');
-        insert_bond_el.classList.add('active');
-    });
+    const modes = [
+        [normal_mode_el, 'NORMAL_MODE', 'UNDEFINIED'],
+        [insert_obj_el, 'INSERT_MODE', 'OBJ'],
+        [insert_text_el, 'INSERT_MODE', 'TEXT'],
+        [insert_bond_el, 'INSERT_MODE', 'BOND']
+    ];
+    for (const [mode, mode_name, type_el] of modes) {
+        mode.addEventListener('click', (e) => {
+            switch_mode(tree_app, mode_name, type_el);
+            for (const [e, ..._] of modes)
+                e.classList.remove('active');
+            mode.classList.add('active');
+        });
+    }
     let w_tmp, h_tmp;
-    window.addEventListener('keyup', (e) => {
-        switch (e.code) {
-            case 'KeyC':
-                switch_mode(tree_app, "INSERT_MODE", "OBJ");
-                break;
-            case 'KeyV':
-                switch_mode(tree_app, "INSERT_MODE", "BOND");
-                break;
-            case 'KeyN':
-                switch_mode(tree_app, "NORMAL_MODE");
-                break;
-            case 'Backslash':
-                w_tmp = tree_app.tree_grid.viewBox.baseVal.width;
-                h_tmp = tree_app.tree_grid.viewBox.baseVal.height;
-                tree_app.tree_grid.viewBox.baseVal.width /= scale_factor;
-                tree_app.tree_grid.viewBox.baseVal.height /= scale_factor;
-                tree_app.tree_grid.viewBox.baseVal.x += w_tmp / (scale_factor * 4);
-                tree_app.tree_grid.viewBox.baseVal.y += h_tmp / (scale_factor * 4);
-                break;
-            case 'BracketRight':
-                w_tmp = tree_app.tree_grid.viewBox.baseVal.width;
-                h_tmp = tree_app.tree_grid.viewBox.baseVal.height;
-                tree_app.tree_grid.viewBox.baseVal.width *= scale_factor;
-                tree_app.tree_grid.viewBox.baseVal.height *= scale_factor;
-                tree_app.tree_grid.viewBox.baseVal.x += w_tmp * (1 - scale_factor) / 2;
-                tree_app.tree_grid.viewBox.baseVal.y += h_tmp * (1 - scale_factor) / 2;
-                break;
-            case 'ArrowUp':
-                tree_app.tree_grid.viewBox.baseVal.y += GRID_SIZE;
-                break;
-            case 'ArrowDown':
-                tree_app.tree_grid.viewBox.baseVal.y -= GRID_SIZE;
-                break;
-            case 'ArrowRight':
-                tree_app.tree_grid.viewBox.baseVal.x -= GRID_SIZE;
-                break;
-            case 'ArrowLeft':
-                tree_app.tree_grid.viewBox.baseVal.x += GRID_SIZE;
-                break;
-            case 'KeyZ':
-                tree_app.tree_grid.viewBox.baseVal.y = 0;
-                tree_app.tree_grid.viewBox.baseVal.x = 0;
-                break;
-            default:
-                console.log(e.code);
-        }
-    });
 }
-var scale_factor = 1.5;
 console.info("DOM loaded");
 const tree_grid = document.getElementById('tree_grid');
 if (tree_grid === null)
