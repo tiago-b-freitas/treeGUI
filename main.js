@@ -14,7 +14,7 @@ class Vector2 {
     y;
     matrix;
     constructor(x, y) {
-        this.matrix = new DOMMatrixReadOnly([x, 0, 0, y, 0, 0]);
+        this.matrix = new DOMMatrix([x, 0, 0, y, 0, 0]);
         this.x = x;
         this.y = y;
     }
@@ -45,6 +45,12 @@ class Vector2 {
     multiply(other_matrix) {
         const tmp_matrix = this.matrix.multiply(other_matrix);
         return new Vector2(tmp_matrix.a, tmp_matrix.d);
+    }
+    set_xy(x, y) {
+        this.matrix.a = x;
+        this.matrix.d = y;
+        this.x = x;
+        this.y = y;
     }
 }
 const OBJ_DIM = new Vector2(15 * GRID_SIZE, 6 * GRID_SIZE);
@@ -382,7 +388,7 @@ function set_normal_mode(tree_app) {
     var offset = undefined;
     const handle_mouse_move_El = throttle((e) => {
         if (is_dragging && el_dragged !== null) {
-            el_dragged.move_to(get_coords(tree_app, Vector2.from_mouse(e)).sub(offset).div(GRID_SIZE).round().scale(GRID_SIZE));
+            el_dragged.move_to(get_coords(tree_app).sub(offset).div(GRID_SIZE).round().scale(GRID_SIZE));
         }
     }, 16.67);
     const handle_mouse_move_line = throttle((e) => {
@@ -417,7 +423,7 @@ function set_normal_mode(tree_app) {
         el_dragged = obj_tmp;
         el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
         is_dragging = true;
-        offset = get_coords(tree_app, Vector2.from_mouse(e)).sub(el_dragged.coords);
+        offset = get_coords(tree_app).sub(el_dragged.coords);
     };
     const handle_mouse_up = (e) => {
         is_dragging = false;
@@ -450,16 +456,16 @@ function create_line(tree_app, starter_obj, points) {
     return line;
 }
 const mouse_coords = Vector2.zero();
-window.addEventListener('mousemove', (e) => {
-    mouse_coords.x = e.clientX;
-    mouse_coords.y = e.clientY;
-});
-function get_coords(tree_app, coords) {
+const global_mouse_position = throttle((e) => {
+    mouse_coords.set_xy(e.clientX, e.clientY);
+}, 20);
+window.addEventListener('mousemove', global_mouse_position);
+function get_coords(tree_app) {
     const ctm = tree_app.tree_grid.getScreenCTM();
     if (ctm === null)
         throw new Error('No possible to get screen CTM.');
     const padding = new Vector2(tree_app.tree_grid.viewBox.baseVal.x, tree_app.tree_grid.viewBox.baseVal.y);
-    return coords.multiply(ctm.inverse()).add(padding);
+    return mouse_coords.multiply(ctm.inverse()).add(padding);
 }
 function set_insert_mode_bond(tree_app) {
     let starter_obj = null;
@@ -505,14 +511,14 @@ function set_insert_mode_bond(tree_app) {
         else {
             starter_obj = obj;
             starter_obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
-            line = create_line(tree_app, starter_obj, get_coords(tree_app, Vector2.from_mouse(e)));
+            line = create_line(tree_app, starter_obj, get_coords(tree_app));
             tree_app.tmp_element = line.el_key;
             is_putting = true;
         }
     };
     const handle_mouse_move = throttle((e) => {
         if (is_putting && starter_obj !== null && line !== null) {
-            let mouse_coords = get_coords(tree_app, Vector2.from_mouse(e));
+            let mouse_coords = get_coords(tree_app);
             line.move_to_insert_mode(starter_obj, mouse_coords, 50);
         }
     }, 16.67);
@@ -543,12 +549,12 @@ function set_insert_mode_obj(tree_app, e) {
     const handle_mouse_move = (e) => {
         if (obj === null)
             return;
-        obj.move_to(get_coords(tree_app, Vector2.from_mouse(e)).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE));
+        obj.move_to(get_coords(tree_app).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE));
         is_putting = true;
     };
     const handle_mouse_over = (e) => {
         if (obj === null) {
-            const coords = get_coords(tree_app, Vector2.from_mouse(e)).sub(OBJ_DIM.div(2));
+            const coords = get_coords(tree_app).sub(OBJ_DIM.div(2));
             obj = create_obj(coords, OBJ_DIM, tree_app);
             tree_app.tmp_element = obj.el_key;
             tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
@@ -573,9 +579,7 @@ function set_insert_mode_obj(tree_app, e) {
     tree_app.events.push(['click', handle_mouse_click]);
     tree_app.events.push(['mousemove', handle_mouse_move]);
     if (e !== null && e.code === 'KeyC') {
-        console.log(mouse_coords);
-        const coords = get_coords(tree_app, mouse_coords).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE);
-        console.log(coords);
+        const coords = get_coords(tree_app).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE);
         obj = create_obj(coords, OBJ_DIM, tree_app);
         tree_app.tmp_element = obj.el_key;
         obj.move_to(coords);
@@ -616,7 +620,7 @@ function set_insert_mode_text(tree_app) {
             window.removeEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
             window.removeEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
         }
-        else if (obj.is_outside(get_coords(tree_app, Vector2.from_mouse(e)))) {
+        else if (obj.is_outside(get_coords(tree_app))) {
             if (obj.el_text.textContent !== null && obj.el_text.textContent.trim()) {
                 obj.el_text.textContent = obj.el_text.textContent.trim();
                 obj.el_text.style.color = 'black';
