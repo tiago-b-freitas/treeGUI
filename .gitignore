@@ -4,3 +4,5 @@ TAGS
 .vimrc
 notes.txt
 *.js
+*.svg
+*.png
