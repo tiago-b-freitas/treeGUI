@@ -21,6 +21,9 @@ class Vector2 {
     static zero() {
         return new Vector2(0, 0);
     }
+    static from_mouse(e) {
+        return new Vector2(e.clientX, e.clientY);
+    }
     len(other) {
         return Math.sqrt((this.x - other.x) ** 2 + (this.y - other.y) ** 2);
     }
@@ -89,6 +92,7 @@ class ElLine {
 class ElObj {
     el;
     el_rect;
+    el_text_wrapper;
     el_text;
     has_text;
     el_key = -1;
@@ -104,15 +108,33 @@ class ElObj {
     constructor(x, y, w, h) {
         let group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         let rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        let text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        let foreignObj = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+        let text = document.createElement('div');
         this.el = group;
         this.el_rect = rect;
+        this.el_text_wrapper = foreignObj;
         this.el_text = text;
         this.el.appendChild(this.el_rect);
-        this.el.appendChild(this.el_text);
+        this.el_text_wrapper.appendChild(this.el_text);
+        this.el.appendChild(this.el_text_wrapper);
         this.el_rect.setAttribute('x', '0');
         this.el_rect.setAttribute('y', '0');
-        this.el_text.setAttribute('stroke', 'none');
+        this.el_text_wrapper.setAttribute('x', '0');
+        this.el_text_wrapper.setAttribute('y', '0');
+        this.el_text_wrapper.setAttribute('width', (OBJ_DIM.x).toString());
+        this.el_text_wrapper.setAttribute('height', (OBJ_DIM.y).toString());
+        this.el_text.style.wordWrap = 'break-word';
+        this.el_text.style.wordBreak = 'break-word';
+        this.el_text.style.width = `${(OBJ_DIM.x - 20)}px`;
+        this.el_text.style.height = `${(OBJ_DIM.y - 20)}px`;
+        this.el_text.style.position = 'relative';
+        this.el_text.style.top = '8px';
+        this.el_text.style.left = '8px';
+        this.el_text.style.color = 'gray';
+        this.el_text.style.display = 'grid';
+        this.el_text.style.alignItems = 'center';
+        this.el_text.style.textAlign = 'center';
+        this.el_text.style.userSelect = 'none';
         this.el_text.textContent = STD_TEXT;
         this.has_text = false;
         this.coords = new Vector2(x, y);
@@ -260,14 +282,107 @@ function cleaner(tree_app) {
     clean_tmps(tree_app);
     clean_events(tree_app);
 }
+function search_obj(tree_app, target, target_class) {
+    let obj_tmp = null;
+    for (let i = 0; i < 3 && target !== null && target !== undefined; ++i) {
+        if (target.matches(`.${target_class}`)) {
+            obj_tmp = tree_app.pool.get_from_svg(target);
+            break;
+        }
+        target = target.parentElement;
+    }
+    return obj_tmp;
+}
+let modes;
+let normal_mode;
+let normal_mode_el;
+let insert_obj_el;
+let insert_bond_el;
+let insert_text_el;
+const wrapper_handler_window_keyup_switch_modes = (e) => {
+    handler_window_keyup_switch_modes(e, tree_app);
+};
+const handler_window_keyup_switch_modes = (e, tree_app) => {
+    switch (e.code) {
+        case 'KeyN':
+            switch_mode(tree_app, e, "NORMAL_MODE");
+            for (const [e, ..._] of modes)
+                e.classList.remove('active');
+            if (normal_mode_el !== null)
+                normal_mode_el.classList.add('active');
+            break;
+        case 'KeyC':
+            switch_mode(tree_app, e, "INSERT_MODE", "OBJ");
+            for (const [e, ..._] of modes)
+                e.classList.remove('active');
+            if (insert_obj_el !== null)
+                insert_obj_el.classList.add('active');
+            break;
+        case 'KeyV':
+            switch_mode(tree_app, e, "INSERT_MODE", "BOND");
+            for (const [e, ..._] of modes)
+                e.classList.remove('active');
+            if (insert_bond_el !== null)
+                insert_bond_el.classList.add('active');
+            break;
+        case 'KeyT':
+            switch_mode(tree_app, e, "INSERT_MODE", "TEXT");
+            for (const [e, ..._] of modes)
+                e.classList.remove('active');
+            if (insert_text_el !== null)
+                insert_text_el.classList.add('active');
+            break;
+    }
+};
+const wrapper_handler_window_keyup_zoom_and_pan = (e) => {
+    handler_window_keyup_zoom_and_pan(e, tree_app);
+};
+const handler_window_keyup_zoom_and_pan = (e, tree_app) => {
+    let w_tmp, h_tmp;
+    switch (e.code) {
+        case 'Backslash':
+            w_tmp = tree_app.tree_grid.viewBox.baseVal.width;
+            h_tmp = tree_app.tree_grid.viewBox.baseVal.height;
+            tree_app.tree_grid.viewBox.baseVal.width /= SCALE_FACTOR;
+            tree_app.tree_grid.viewBox.baseVal.height /= SCALE_FACTOR;
+            tree_app.tree_grid.viewBox.baseVal.x += w_tmp / (SCALE_FACTOR * 4);
+            tree_app.tree_grid.viewBox.baseVal.y += h_tmp / (SCALE_FACTOR * 4);
+            break;
+        case 'BracketRight':
+            w_tmp = tree_app.tree_grid.viewBox.baseVal.width;
+            h_tmp = tree_app.tree_grid.viewBox.baseVal.height;
+            tree_app.tree_grid.viewBox.baseVal.width *= SCALE_FACTOR;
+            tree_app.tree_grid.viewBox.baseVal.height *= SCALE_FACTOR;
+            tree_app.tree_grid.viewBox.baseVal.x += w_tmp * (1 - SCALE_FACTOR) / 2;
+            tree_app.tree_grid.viewBox.baseVal.y += h_tmp * (1 - SCALE_FACTOR) / 2;
+            break;
+        case 'ArrowUp':
+            tree_app.tree_grid.viewBox.baseVal.y += GRID_SIZE;
+            break;
+        case 'ArrowDown':
+            tree_app.tree_grid.viewBox.baseVal.y -= GRID_SIZE;
+            break;
+        case 'ArrowRight':
+            tree_app.tree_grid.viewBox.baseVal.x -= GRID_SIZE;
+            break;
+        case 'ArrowLeft':
+            tree_app.tree_grid.viewBox.baseVal.x += GRID_SIZE;
+            break;
+        case 'KeyZ':
+            tree_app.tree_grid.viewBox.baseVal.y = 0;
+            tree_app.tree_grid.viewBox.baseVal.x = 0;
+            break;
+        default:
+            console.log(e.code);
+    }
+};
 function set_normal_mode(tree_app) {
     var el_dragged = null;
     var is_dragging = false;
     var offset = undefined;
-    cleaner(tree_app);
     const handle_mouse_move_El = throttle((e) => {
         if (is_dragging && el_dragged !== null) {
-            el_dragged.move_to(get_coords(tree_app, e).sub(offset).div(GRID_SIZE).round().scale(GRID_SIZE));
+            el_dragged.move_to(get_coords(tree_app, Vector2.from_mouse(e)).sub(offset).div(GRID_SIZE).round().scale(GRID_SIZE));
         }
     }, 16.67);
     const handle_mouse_move_line = throttle((e) => {
@@ -285,27 +400,24 @@ function set_normal_mode(tree_app) {
         }
     }, 16.67);
     const handle_mouse_over = (e) => {
-        const target = e.target;
-        if (is_dragging || target === null || target.parentElement === null || !target.parentElement.matches('.draggable'))
+        const obj = search_obj(tree_app, e.target, 'draggable');
+        if (is_dragging || obj === null)
             return;
-        target.parentElement.setAttribute('fill', OBJ_COLOR_ACTIVE);
+        obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
     };
     const handle_mouse_out = (e) => {
-        const target = e.target;
-        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable'))
-            return;
-        if (!is_dragging) {
-            target.parentElement.setAttribute('fill', OBJ_COLOR);
-        }
+        const obj = search_obj(tree_app, e.target, 'draggable');
+        if (!is_dragging && obj !== null)
+            obj.el.setAttribute('fill', OBJ_COLOR);
     };
     const handle_mouse_down = (e) => {
-        const target = e.target;
-        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable'))
+        const obj_tmp = search_obj(tree_app, e.target, 'draggable');
+        if (obj_tmp === null)
             return;
-        el_dragged = tree_app.pool.get_from_svg(target.parentElement);
+        el_dragged = obj_tmp;
         el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
         is_dragging = true;
-        offset = get_coords(tree_app, e).sub(el_dragged.coords);
+        offset = get_coords(tree_app, Vector2.from_mouse(e)).sub(el_dragged.coords);
     };
     const handle_mouse_up = (e) => {
         is_dragging = false;
@@ -327,16 +439,9 @@ function set_normal_mode(tree_app) {
     tree_app.events.push(['mousemove', handle_mouse_move_line]);
     tree_app.events.push(['mouseup', handle_mouse_up]);
 }
-function centralize_text(el_text) {
-    const text_width = el_text.getBBox().width;
-    const text_height = el_text.getBBox().height;
-    el_text.setAttribute('x', ((OBJ_DIM.x - text_width) / 2).toString());
-    el_text.setAttribute('y', ((OBJ_DIM.y + text_height / 2) / 2).toString());
-}
 function create_obj(coords, OBJ_DIM, tree_app) {
     const obj = new ElObj(coords.x, coords.y, OBJ_DIM.x, OBJ_DIM.y);
     obj.el_key = tree_app.pool.push(obj, tree_app.elements);
-    centralize_text(obj.el_text);
     return obj;
 }
 function create_line(tree_app, starter_obj, points) {
@@ -344,19 +449,22 @@ function create_line(tree_app, starter_obj, points) {
     line.el_key = tree_app.pool.push(line, tree_app.elements);
     return line;
 }
-function get_coords(tree_app, e) {
+const mouse_coords = Vector2.zero();
+window.addEventListener('mousemove', (e) => {
+    mouse_coords.x = e.clientX;
+    mouse_coords.y = e.clientY;
+});
+function get_coords(tree_app, coords) {
     const ctm = tree_app.tree_grid.getScreenCTM();
     if (ctm === null)
         throw new Error('No possible to get screen CTM.');
-    let coords = new Vector2(e.clientX, e.clientY).multiply(ctm.inverse());
     const padding = new Vector2(tree_app.tree_grid.viewBox.baseVal.x, tree_app.tree_grid.viewBox.baseVal.y);
-    return coords.add(padding);
+    return coords.multiply(ctm.inverse()).add(padding);
 }
 function set_insert_mode_bond(tree_app) {
     let starter_obj = null;
     let line = null;
     let is_putting = false;
-    cleaner(tree_app);
     const handle_mouse_over = (e) => {
         const target = e.target;
         if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable'))
@@ -397,14 +505,14 @@ function set_insert_mode_bond(tree_app) {
         else {
             starter_obj = obj;
             starter_obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
-            line = create_line(tree_app, starter_obj, get_coords(tree_app, e));
+            line = create_line(tree_app, starter_obj, get_coords(tree_app, Vector2.from_mouse(e)));
             tree_app.tmp_element = line.el_key;
             is_putting = true;
         }
     };
     const handle_mouse_move = throttle((e) => {
         if (is_putting && starter_obj !== null && line !== null) {
-            let mouse_coords = get_coords(tree_app, e);
+            let mouse_coords = get_coords(tree_app, Vector2.from_mouse(e));
             line.move_to_insert_mode(starter_obj, mouse_coords, 50);
         }
     }, 16.67);
@@ -428,20 +536,19 @@ function set_insert_mode_bond(tree_app) {
     tree_app.events.push(['mousemove', handle_mouse_move]);
     tree_app.events.push(['mousedown', wrapper_mouse_down]);
 }
-function set_insert_mode_obj(tree_app) {
+function set_insert_mode_obj(tree_app, e) {
     let is_putting = false;
     let starter_obj = null;
     let obj = null;
-    cleaner(tree_app);
     const handle_mouse_move = (e) => {
         if (obj === null)
             return;
-        obj.move_to(get_coords(tree_app, e).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE));
+        obj.move_to(get_coords(tree_app, Vector2.from_mouse(e)).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE));
         is_putting = true;
     };
     const handle_mouse_over = (e) => {
         if (obj === null) {
-            const coords = get_coords(tree_app, e).sub(OBJ_DIM.div(2));
+            const coords = get_coords(tree_app, Vector2.from_mouse(e)).sub(OBJ_DIM.div(2));
             obj = create_obj(coords, OBJ_DIM, tree_app);
             tree_app.tmp_element = obj.el_key;
             tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
@@ -465,104 +572,101 @@ function set_insert_mode_obj(tree_app) {
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['click', handle_mouse_click]);
     tree_app.events.push(['mousemove', handle_mouse_move]);
+    if (e !== null && e.code === 'KeyC') {
+        console.log(mouse_coords);
+        const coords = get_coords(tree_app, mouse_coords).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE);
+        console.log(coords);
+        obj = create_obj(coords, OBJ_DIM, tree_app);
+        tree_app.tmp_element = obj.el_key;
+        obj.move_to(coords);
+        tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
+        tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
+    }
 }
 function set_insert_mode_text(tree_app) {
     let is_inserting = false;
-    let foreignObj = null;
-    let inputObj = null;
     let obj = null;
-    cleaner(tree_app);
-    document.getElementsByTagName('body')[0].style.cursor = 'text';
     const handle_mouse_over = (e) => {
-        const target = e.target;
-        if (obj === null && target !== null && target.parentElement !== null) {
-            target.parentElement.setAttribute('fill', OBJ_COLOR_ACTIVE);
-            if (target.parentElement.matches('.obj') && inputObj === null) {
-                foreignObj = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
-                foreignObj.setAttribute('x', '0');
-                foreignObj.setAttribute('y', '0');
-                foreignObj.setAttribute('width', (OBJ_DIM.x).toString());
-                foreignObj.setAttribute('height', (OBJ_DIM.y).toString());
-                inputObj = document.createElement('div');
-                inputObj.contentEditable = 'true';
-                inputObj.style.wordWrap = 'break-word';
-                inputObj.style.wordBreak = 'break-word';
-                inputObj.style.width = `${(OBJ_DIM.x - 20)}px`;
-                inputObj.style.height = `${(OBJ_DIM.y - 20)}px`;
-                inputObj.style.position = 'relative';
-                inputObj.style.top = '8px';
-                inputObj.style.left = '8px';
-                inputObj.style.border = '2px dashed cadetblue';
-                foreignObj.appendChild(inputObj);
-                obj = tree_app.pool.get_from_svg(target.parentElement);
-                obj.el.appendChild(foreignObj);
-            }
+        let target = e.target;
+        const obj_tmp = search_obj(tree_app, target, 'obj');
+        if (obj === null && obj_tmp !== null) {
+            obj = obj_tmp;
+            obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
+            obj.el_text.style.border = '2px dashed cadetblue';
+            obj.el_text.contentEditable = 'true';
         }
-        if (!is_inserting && obj !== null && obj.is_outside(get_coords(tree_app, e))) {
+        else if (!is_inserting && obj !== null && obj_tmp === null) {
             obj.el.setAttribute('fill', OBJ_COLOR);
-            obj.el.removeChild(foreignObj);
-            inputObj = null;
-            foreignObj = null;
+            obj.el_text.style.border = '';
+            obj.el_text.contentEditable = 'false';
             obj = null;
         }
     };
     const handle_mouse_down = (e) => {
-        if (obj === null || inputObj === null)
+        if (obj === null)
             return;
         if (!is_inserting) {
-            if (obj.has_text) {
-                inputObj.textContent = obj.el_text.textContent;
+            if (!obj.has_text) {
+                obj.el_text.textContent = '';
             }
-            obj.el_text.textContent = '';
-            inputObj.style.border = '';
-            inputObj.style.padding = '2px';
+            obj.el_text.style.border = '';
+            obj.el_text.style.padding = '2px';
+            obj.el_text.style.userSelect = 'text';
             is_inserting = true;
+            window.removeEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
+            window.removeEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
         }
-        else if (obj.is_outside(get_coords(tree_app, e))) {
-            if (inputObj.textContent) {
-                obj.el_text.textContent = inputObj.textContent;
-                obj.el_text.style.fill = 'black';
+        else if (obj.is_outside(get_coords(tree_app, Vector2.from_mouse(e)))) {
+            if (obj.el_text.textContent !== null && obj.el_text.textContent.trim()) {
+                obj.el_text.textContent = obj.el_text.textContent.trim();
+                obj.el_text.style.color = 'black';
                 obj.has_text = true;
             }
             else {
                 obj.el_text.textContent = STD_TEXT;
-                obj.el_text.style.fill = 'gray';
+                obj.el_text.style.color = 'gray';
                 obj.has_text = false;
             }
-            centralize_text(obj.el_text);
-            obj.el.removeChild(foreignObj);
-            inputObj = null;
-            foreignObj = null;
             is_inserting = false;
+            obj.el_text.style.userSelect = 'none';
+            obj.el_text.contentEditable = 'false';
+            obj.el_text.style.padding = '';
             obj = null;
+            window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
+            window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
         }
     };
-    tree_app.tree_grid.addEventListener('keyup', (e) => {
-        if (e.code === 'Enter' && obj !== null && inputObj !== null) {
-            if (inputObj.textContent) {
-                obj.el_text.textContent = inputObj.textContent;
-                obj.el_text.style.fill = 'black';
+    const handle_key_up = (e) => {
+        if (obj === null)
+            return;
+        if (e.code === 'Enter') {
+            if (obj.el_text.textContent !== null && obj.el_text.textContent.trim()) {
+                obj.el_text.textContent = obj.el_text.textContent.trim();
+                obj.el_text.style.color = 'black';
                 obj.has_text = true;
             }
             else {
                 obj.el_text.textContent = STD_TEXT;
-                obj.el_text.style.fill = 'gray';
+                obj.el_text.style.color = 'gray';
                 obj.has_text = false;
             }
-            centralize_text(obj.el_text);
-            obj.el.removeChild(foreignObj);
-            inputObj = null;
-            foreignObj = null;
             is_inserting = false;
+            obj.el_text.contentEditable = 'false';
+            obj.el_text.style.padding = '';
             obj = null;
         }
-    });
+        else {
+            console.log(obj.el_text.textContent.length);
+        }
+    };
+    tree_app.tree_grid.addEventListener('keyup', handle_key_up);
     tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
     tree_app.tree_grid.addEventListener('mousedown', handle_mouse_down);
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['mousedown', handle_mouse_down]);
+    tree_app.events.push(['keyup', handle_key_up]);
 }
-function switch_mode(tree_app, mode, type_el) {
+function switch_mode(tree_app, e, mode, type_el) {
     if (Mode[mode] === Mode[tree_app.current_mode] && type_el === tree_app.current_type_el) {
         return;
     }
@@ -570,6 +674,7 @@ function switch_mode(tree_app, mode, type_el) {
     document.getElementsByTagName('body')[0].style.cursor = 'default';
     tree_app.current_mode = mode;
     tree_app.current_type_el = type_el;
+    cleaner(tree_app);
     switch (Mode[mode]) {
         case Mode.INITIAL_MODE:
             initial_set_up(tree_app);
@@ -586,7 +691,7 @@ function switch_mode(tree_app, mode, type_el) {
                     set_insert_mode_bond(tree_app);
                     break;
                 case TypeEl.OBJ:
-                    set_insert_mode_obj(tree_app);
+                    set_insert_mode_obj(tree_app, e);
                     break;
                 case TypeEl.TEXT:
                     set_insert_mode_text(tree_app);
@@ -643,33 +748,34 @@ function initial_set_up(tree_app) {
             menu_grid.style.top = ((screen_h - Number(menu_grid.getAttribute('height'))) / 2).toString();
         }
     });
-    const normal_mode_el = document.getElementById('normal-mode');
+    normal_mode_el = document.getElementById('normal-mode');
     if (normal_mode_el === null)
         throw new Error('Id "normal-mode" not found');
-    const insert_obj_el = document.getElementById('insert-obj');
+    insert_obj_el = document.getElementById('insert-obj');
     if (insert_obj_el === null)
         throw new Error('ID `insert-obj` is not found!');
-    const insert_text_el = document.getElementById('insert-text');
-    if (insert_text_el === null)
-        throw new Error('ID `insert-text` is not found!');
-    const insert_bond_el = document.getElementById('insert-bond');
+    insert_bond_el = document.getElementById('insert-bond');
     if (insert_bond_el === null)
         throw new Error('Id "insert-bond" not found');
-    const modes = [
+    insert_text_el = document.getElementById('insert-text');
+    if (insert_text_el === null)
+        throw new Error('ID `insert-text` is not found!');
+    modes = [
         [normal_mode_el, 'NORMAL_MODE', 'UNDEFINIED'],
         [insert_obj_el, 'INSERT_MODE', 'OBJ'],
+        [insert_bond_el, 'INSERT_MODE', 'BOND'],
         [insert_text_el, 'INSERT_MODE', 'TEXT'],
-        [insert_bond_el, 'INSERT_MODE', 'BOND']
     ];
     for (const [mode, mode_name, type_el] of modes) {
         mode.addEventListener('click', (e) => {
-            switch_mode(tree_app, mode_name, type_el);
+            switch_mode(tree_app, null, mode_name, type_el);
             for (const [e, ..._] of modes)
                 e.classList.remove('active');
             mode.classList.add('active');
         });
     }
-    let w_tmp, h_tmp;
+    window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
+    window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
 }
 console.info("DOM loaded");
 const tree_grid = document.getElementById('tree_grid');
@@ -683,14 +789,14 @@ var tree_app = {
     elements,
     pool: new Pool(),
     current_mode: "UNDEFINIED",
-    current_type_el: undefined,
+    current_type_el: "UNDEFINIED",
     events: [],
     tmp_element: null,
 };
 function main() {
-    switch_mode(tree_app, "INITIAL_MODE");
+    switch_mode(tree_app, null, "INITIAL_MODE");
     console.log(`Starting in ${tree_app.current_mode}`);
-    switch_mode(tree_app, "NORMAL_MODE");
+    switch_mode(tree_app, null, "NORMAL_MODE");
 }
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", main);
