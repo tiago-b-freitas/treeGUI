@@ -11,6 +11,47 @@ const OBJ_COLOR_MOVE = '#fffff0a0'
 const SCALE_FACTOR = 1.5;
 const STD_TEXT = 'Insira o texto aqui';
 
+type Events = [string, any][];
+
+enum Mode {
+    INITIAL_MODE,
+    NORMAL_MODE,
+    INSERT_MODE,
+    UNDEFINIED = -1,
+}
+enum TypeEl {
+    OBJ,
+    TEXT,
+    BOND,
+    UNDEFINIED = -1,
+}
+enum TypeTmp {
+    OBJ,
+    TEXT,
+    LINE,
+}
+
+type El = ElObj | ElLine;
+type ModeStrings = keyof typeof Mode;
+type TypeElStrings = keyof typeof TypeEl;
+type ElKey = number | null;
+type LineType = 's' | 'e';
+type Tmp = [TypeTmp, ElKey][];
+
+type TreeApp = {
+    tree_grid: SVGSVGElement,
+    elements: SVGGElement,
+    pool: Pool,
+    current_mode: ModeStrings,
+    current_type_el: TypeElStrings | undefined;
+    events: Events,
+    tmps: Tmp,
+}
+type ElPool = Map<ElKey, El>;
+
+type Vector4 = [number, number, number, number]; 
+type StartPoints = [Vector2, Vector2, Vector2, Vector2];
+
 class Vector2 {
     x: number;
     y: number;
@@ -250,7 +291,7 @@ class Pool {
         if (el === undefined) throw new Error(`El_key ${el_key} not found in pool ${this.pool}`);
         return el;
     }
-    public get_from_svg(el_svg: SVGElement | HTMLElement): ElObj | ElLine {
+    public get_from_svg(el_svg: SVGElement | HTMLElement): El {
         const el_key = Number(el_svg.getAttribute('el_key'));
         return this.get(el_key);
     }
@@ -285,48 +326,22 @@ function getRandomRange(min: number, max: number): number {
     return Math.random() * (max - min) + min;
 }
 
-
-type Events = [string, any][];
-
-enum Mode {
-    INITIAL_MODE,
-    NORMAL_MODE,
-    INSERT_MODE,
-    UNDEFINIED = -1,
-}
-enum TypeEl {
-    OBJ,
-    TEXT,
-    BOND,
-    UNDEFINIED = -1,
-}
-
-type Obj = ElObj;
-type Bond = ElLine;
-type El = Obj | Bond;
-type ModeStrings = keyof typeof Mode;
-type TypeElStrings = keyof typeof TypeEl;
-type ElKey = number | null;
-type LineType = 's' | 'e';
-type SVGTypes = SVGRectElement;
-type TreeApp = {
-    tree_grid: SVGSVGElement,
-    elements: SVGGElement,
-    pool: Pool,
-    current_mode: ModeStrings,
-    current_type_el: TypeElStrings | undefined;
-    events: Events,
-    tmp_element: ElKey | null,
-}
-type ElPool = Map<ElKey, El>;
-
-type Vector4 = [number, number, number, number]; 
-type StartPoints = [Vector2, Vector2, Vector2, Vector2];
-
 function clean_tmps(tree_app: TreeApp): void {
-    if (tree_app.tmp_element !== null) {
-        tree_app.pool.remove(tree_app.tmp_element, tree_app.elements);
-        tree_app.tmp_element = null;
+    while (tree_app.tmps.length) {
+        const [type, el_key] = <[TypeTmp, ElKey]> tree_app.tmps.pop();
+        switch (type) {
+            case TypeTmp.OBJ:
+            case TypeTmp.LINE:
+                tree_app.pool.remove(el_key, tree_app.elements);
+                break
+            case TypeTmp.TEXT:
+                console.log('a');
+                const obj = tree_app.pool.get(el_key) as ElObj;
+                obj.el.setAttribute('fill', OBJ_COLOR);
+                obj.el_text.style.border = '';
+                obj.el_text.contentEditable = 'false';
+                break
+        }
     }
 }
 
@@ -494,7 +509,7 @@ function set_normal_mode(tree_app: TreeApp): void {
     tree_app.events.push(['mouseup',   handle_mouse_up]);
 }
 
-function create_line(tree_app: TreeApp, starter_obj: Obj, points: Vector2): ElLine {
+function create_line(tree_app: TreeApp, starter_obj: ElObj, points: Vector2): ElLine {
     const line = new ElLine(starter_obj, points);
     line.el_key = tree_app.pool.push(line, tree_app.elements);
     return line;
@@ -538,7 +553,7 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
                 }
                 if (line !== null && line.el_key !== null) {
                     tree_app.pool.remove(line.el_key, tree_app.elements);
-                    tree_app.tmp_element = null;
+                    tree_app.tmps.pop();
                     line = null;
                 }
             }
@@ -550,7 +565,7 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
             obj.el.setAttribute('fill', OBJ_COLOR);
             starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
             obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
-            tree_app.tmp_element = null;
+            tree_app.tmps.pop();
             is_putting = false;
             starter_obj = null;
             line = null;
@@ -558,7 +573,7 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
             starter_obj = obj;
             starter_obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
             line = create_line(tree_app, starter_obj as ElObj, get_coords(tree_app));
-            tree_app.tmp_element = line.el_key;
+            tree_app.tmps.push([TypeTmp.LINE, line.el_key]);
             is_putting = true;
         }
     };
@@ -604,7 +619,7 @@ function set_insert_mode_obj(tree_app: TreeApp, e: KeyboardEvent | null) {
         if (obj === null) {
             const coords = get_coords(tree_app).sub(OBJ_DIM.div(2));
             obj = new ElObj(coords, OBJ_DIM, tree_app);
-            tree_app.tmp_element = obj.el_key;
+            tree_app.tmps.push([TypeTmp.OBJ, obj.el_key]);
             tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
             tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
         }
@@ -614,7 +629,7 @@ function set_insert_mode_obj(tree_app: TreeApp, e: KeyboardEvent | null) {
         if (obj === null || !is_putting) return;
         tree_app.tree_grid.removeEventListener('mousemove', handle_mouse_move);
         tree_app.tree_grid.addEventListener('mouseover',  handle_mouse_over);
-        tree_app.tmp_element = null;
+        tree_app.tmps.pop();
         obj.el.setAttribute('fill', OBJ_COLOR);
         obj.el_text.setAttribute('fill', 'gray');
         obj = null;
@@ -631,12 +646,11 @@ function set_insert_mode_obj(tree_app: TreeApp, e: KeyboardEvent | null) {
     if (e !== null && e.code === 'KeyC') {
         const coords = get_coords(tree_app).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE)
         obj = new ElObj(coords, OBJ_DIM, tree_app);
-        tree_app.tmp_element = obj.el_key;
+        tree_app.tmps.push([TypeTmp.OBJ, obj.el_key]);
         // obj.move_to(coords);
         tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
         tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
     }
-
 }
 
 function set_insert_mode_text(tree_app: TreeApp) {
@@ -653,11 +667,13 @@ function set_insert_mode_text(tree_app: TreeApp) {
             obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
             obj.el_text.style.border = '2px dashed cadetblue';
             obj.el_text.contentEditable = 'true';
+            tree_app.tmps.push([TypeTmp.TEXT, obj.el_key]);
         } else if (!is_inserting && obj !== null && obj_tmp === null) {
             obj.el.setAttribute('fill', OBJ_COLOR);
             obj.el_text.style.border = '';
             obj.el_text.contentEditable = 'false';
             obj = null;
+            tree_app.tmps.pop();
         }
     };
 
@@ -689,6 +705,7 @@ function set_insert_mode_text(tree_app: TreeApp) {
             obj.el_text.contentEditable = 'false';
             obj.el_text.style.padding = '';
             obj = null;
+            tree_app.tmps.pop();
 
             window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
             window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
@@ -712,6 +729,7 @@ function set_insert_mode_text(tree_app: TreeApp) {
             obj.el_text.contentEditable = 'false';
             obj.el_text.style.padding = '';
             obj = null;
+            tree_app.tmps.pop();
             window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
             window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
         } else {
@@ -859,7 +877,7 @@ function main() {
         current_mode: "UNDEFINIED",
         current_type_el: "UNDEFINIED",
         events: [],
-        tmp_element: null,
+        tmps: [],
     };
     switch_mode(tree_app, null, "INITIAL_MODE");
     console.log(`Starting in ${tree_app.current_mode}`);

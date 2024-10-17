@@ -9,6 +9,26 @@ const OBJ_COLOR_ACTIVE = '#ffffee';
 const OBJ_COLOR_MOVE = '#fffff0a0';
 const SCALE_FACTOR = 1.5;
 const STD_TEXT = 'Insira o texto aqui';
+var Mode;
+(function (Mode) {
+    Mode[Mode["INITIAL_MODE"] = 0] = "INITIAL_MODE";
+    Mode[Mode["NORMAL_MODE"] = 1] = "NORMAL_MODE";
+    Mode[Mode["INSERT_MODE"] = 2] = "INSERT_MODE";
+    Mode[Mode["UNDEFINIED"] = -1] = "UNDEFINIED";
+})(Mode || (Mode = {}));
+var TypeEl;
+(function (TypeEl) {
+    TypeEl[TypeEl["OBJ"] = 0] = "OBJ";
+    TypeEl[TypeEl["TEXT"] = 1] = "TEXT";
+    TypeEl[TypeEl["BOND"] = 2] = "BOND";
+    TypeEl[TypeEl["UNDEFINIED"] = -1] = "UNDEFINIED";
+})(TypeEl || (TypeEl = {}));
+var TypeTmp;
+(function (TypeTmp) {
+    TypeTmp[TypeTmp["OBJ"] = 0] = "OBJ";
+    TypeTmp[TypeTmp["TEXT"] = 1] = "TEXT";
+    TypeTmp[TypeTmp["LINE"] = 2] = "LINE";
+})(TypeTmp || (TypeTmp = {}));
 class Vector2 {
     x;
     y;
@@ -265,24 +285,22 @@ function clean_events(tree_app) {
 function getRandomRange(min, max) {
     return Math.random() * (max - min) + min;
 }
-var Mode;
-(function (Mode) {
-    Mode[Mode["INITIAL_MODE"] = 0] = "INITIAL_MODE";
-    Mode[Mode["NORMAL_MODE"] = 1] = "NORMAL_MODE";
-    Mode[Mode["INSERT_MODE"] = 2] = "INSERT_MODE";
-    Mode[Mode["UNDEFINIED"] = -1] = "UNDEFINIED";
-})(Mode || (Mode = {}));
-var TypeEl;
-(function (TypeEl) {
-    TypeEl[TypeEl["OBJ"] = 0] = "OBJ";
-    TypeEl[TypeEl["TEXT"] = 1] = "TEXT";
-    TypeEl[TypeEl["BOND"] = 2] = "BOND";
-    TypeEl[TypeEl["UNDEFINIED"] = -1] = "UNDEFINIED";
-})(TypeEl || (TypeEl = {}));
 function clean_tmps(tree_app) {
-    if (tree_app.tmp_element !== null) {
-        tree_app.pool.remove(tree_app.tmp_element, tree_app.elements);
-        tree_app.tmp_element = null;
+    while (tree_app.tmps.length) {
+        const [type, el_key] = tree_app.tmps.pop();
+        switch (type) {
+            case TypeTmp.OBJ:
+            case TypeTmp.LINE:
+                tree_app.pool.remove(el_key, tree_app.elements);
+                break;
+            case TypeTmp.TEXT:
+                console.log('a');
+                const obj = tree_app.pool.get(el_key);
+                obj.el.setAttribute('fill', OBJ_COLOR);
+                obj.el_text.style.border = '';
+                obj.el_text.contentEditable = 'false';
+                break;
+        }
     }
 }
 function cleaner(tree_app) {
@@ -484,7 +502,7 @@ function set_insert_mode_bond(tree_app) {
                 }
                 if (line !== null && line.el_key !== null) {
                     tree_app.pool.remove(line.el_key, tree_app.elements);
-                    tree_app.tmp_element = null;
+                    tree_app.tmps.pop();
                     line = null;
                 }
             }
@@ -496,7 +514,7 @@ function set_insert_mode_bond(tree_app) {
             obj.el.setAttribute('fill', OBJ_COLOR);
             starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
             obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
-            tree_app.tmp_element = null;
+            tree_app.tmps.pop();
             is_putting = false;
             starter_obj = null;
             line = null;
@@ -505,7 +523,7 @@ function set_insert_mode_bond(tree_app) {
             starter_obj = obj;
             starter_obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
             line = create_line(tree_app, starter_obj, get_coords(tree_app));
-            tree_app.tmp_element = line.el_key;
+            tree_app.tmps.push([TypeTmp.LINE, line.el_key]);
             is_putting = true;
         }
     };
@@ -544,7 +562,7 @@ function set_insert_mode_obj(tree_app, e) {
         if (obj === null) {
             const coords = get_coords(tree_app).sub(OBJ_DIM.div(2));
             obj = new ElObj(coords, OBJ_DIM, tree_app);
-            tree_app.tmp_element = obj.el_key;
+            tree_app.tmps.push([TypeTmp.OBJ, obj.el_key]);
             tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
             tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
         }
@@ -554,7 +572,7 @@ function set_insert_mode_obj(tree_app, e) {
             return;
         tree_app.tree_grid.removeEventListener('mousemove', handle_mouse_move);
         tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
-        tree_app.tmp_element = null;
+        tree_app.tmps.pop();
         obj.el.setAttribute('fill', OBJ_COLOR);
         obj.el_text.setAttribute('fill', 'gray');
         obj = null;
@@ -569,7 +587,7 @@ function set_insert_mode_obj(tree_app, e) {
     if (e !== null && e.code === 'KeyC') {
         const coords = get_coords(tree_app).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE);
         obj = new ElObj(coords, OBJ_DIM, tree_app);
-        tree_app.tmp_element = obj.el_key;
+        tree_app.tmps.push([TypeTmp.OBJ, obj.el_key]);
         tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
         tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
     }
@@ -585,12 +603,14 @@ function set_insert_mode_text(tree_app) {
             obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
             obj.el_text.style.border = '2px dashed cadetblue';
             obj.el_text.contentEditable = 'true';
+            tree_app.tmps.push([TypeTmp.TEXT, obj.el_key]);
         }
         else if (!is_inserting && obj !== null && obj_tmp === null) {
             obj.el.setAttribute('fill', OBJ_COLOR);
             obj.el_text.style.border = '';
             obj.el_text.contentEditable = 'false';
             obj = null;
+            tree_app.tmps.pop();
         }
     };
     const handle_mouse_down = (e) => {
@@ -623,6 +643,7 @@ function set_insert_mode_text(tree_app) {
             obj.el_text.contentEditable = 'false';
             obj.el_text.style.padding = '';
             obj = null;
+            tree_app.tmps.pop();
             window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
             window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
         }
@@ -645,6 +666,7 @@ function set_insert_mode_text(tree_app) {
             obj.el_text.contentEditable = 'false';
             obj.el_text.style.padding = '';
             obj = null;
+            tree_app.tmps.pop();
             window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
             window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
         }
@@ -785,7 +807,7 @@ function main() {
         current_mode: "UNDEFINIED",
         current_type_el: "UNDEFINIED",
         events: [],
-        tmp_element: null,
+        tmps: [],
     };
     switch_mode(tree_app, null, "INITIAL_MODE");
     console.log(`Starting in ${tree_app.current_mode}`);
