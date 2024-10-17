@@ -400,17 +400,19 @@ const handler_window_keyup_zoom_and_pan = (e, tree_app) => {
             break;
     }
 };
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 function set_normal_mode(tree_app) {
-    var el_dragged = null;
-    var is_dragging = false;
-    var offset = undefined;
-    const handle_mouse_move_El = throttle((e) => {
-        if (is_dragging && el_dragged !== null) {
+    let el_dragged = null;
+    let is_dragging = false;
+    let offset = undefined;
+    let shift = Vector2.zero();
+    const handle_mouse_move = throttle((e) => {
+        if (!is_dragging)
+            return;
+        if (el_dragged instanceof ElObj) {
             el_dragged.move_to(get_coords(tree_app).sub(offset).div(GRID_SIZE).round().scale(GRID_SIZE));
-        }
-    }, 16.67);
-    const handle_mouse_move_line = throttle((e) => {
-        if (is_dragging && el_dragged !== null) {
             for (const [line_key, [line_type, other_el_key]] of el_dragged.childrens) {
                 const line = tree_app.pool.get(line_key);
                 const other_el = tree_app.pool.get(other_el_key);
@@ -422,7 +424,16 @@ function set_normal_mode(tree_app) {
                 }
             }
         }
+        else if (el_dragged instanceof SVGSVGElement) {
+            shift = mouse_coords.sub(offset).div(10);
+            tree_app.tree_grid.viewBox.baseVal.x -= shift.x;
+            tree_app.tree_grid.viewBox.baseVal.y -= shift.y;
+        }
     }, 16.67);
+    const handle_mouse_move_grid = (e) => {
+        if (!is_dragging)
+            return;
+    };
     const handle_mouse_over = (e) => {
         const obj = search_obj(tree_app, e.target, 'draggable');
         if (is_dragging || obj === null)
@@ -435,32 +446,52 @@ function set_normal_mode(tree_app) {
             obj.el.setAttribute('fill', OBJ_COLOR);
     };
     const handle_mouse_down = (e) => {
-        const obj_tmp = search_obj(tree_app, e.target, 'draggable');
-        if (obj_tmp === null)
-            return;
-        el_dragged = obj_tmp;
-        el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
-        is_dragging = true;
-        offset = get_coords(tree_app).sub(el_dragged.coords);
+        const target = e.target;
+        if (target !== null && target.id === 'grid') {
+            el_dragged = tree_app.tree_grid;
+            is_dragging = true;
+            offset = new Vector2(mouse_coords.x, mouse_coords.y);
+        }
+        else {
+            const obj_tmp = search_obj(tree_app, target, 'draggable');
+            if (obj_tmp !== null) {
+                el_dragged = obj_tmp;
+                el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
+                is_dragging = true;
+                offset = get_coords(tree_app).sub(el_dragged.coords);
+            }
+        }
     };
-    const handle_mouse_up = (e) => {
+    const handle_mouse_up = async (e) => {
         is_dragging = false;
-        if (el_dragged !== null)
+        if (el_dragged instanceof ElObj) {
             el_dragged.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
-        el_dragged = null;
-        offset = undefined;
+            el_dragged = null;
+            offset = undefined;
+        }
+        else if (el_dragged instanceof SVGSVGElement) {
+            el_dragged = null;
+            offset = undefined;
+            const epslon = 0.01;
+            let shift_tmp = new Vector2(shift.x, shift.y).scale(0.5);
+            for (let i = 0; Math.abs(shift_tmp.x) > epslon || Math.abs(shift_tmp.y) > epslon; shift_tmp = shift_tmp.scale(0.92), ++i) {
+                tree_app.tree_grid.viewBox.baseVal.x -= shift_tmp.x;
+                tree_app.tree_grid.viewBox.baseVal.y -= shift_tmp.y;
+                await sleep(15);
+            }
+        }
     };
     tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
     tree_app.tree_grid.addEventListener('mouseout', handle_mouse_out);
     tree_app.tree_grid.addEventListener('mousedown', handle_mouse_down);
-    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move_El);
-    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move_line);
+    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
+    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move_grid);
     tree_app.tree_grid.addEventListener('mouseup', handle_mouse_up);
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['mouseout', handle_mouse_out]);
     tree_app.events.push(['mousedown', handle_mouse_down]);
-    tree_app.events.push(['mousemove', handle_mouse_move_El]);
-    tree_app.events.push(['mousemove', handle_mouse_move_line]);
+    tree_app.events.push(['mousemove', handle_mouse_move]);
+    tree_app.events.push(['mousemove', handle_mouse_move_grid]);
     tree_app.events.push(['mouseup', handle_mouse_up]);
 }
 const mouse_coords = Vector2.zero();

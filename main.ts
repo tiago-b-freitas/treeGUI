@@ -442,20 +442,20 @@ const handler_window_keyup_zoom_and_pan = (e: KeyboardEvent, tree_app: TreeApp) 
     }
 };
 
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 function set_normal_mode(tree_app: TreeApp): void {
-    var el_dragged: ElObj | null = null;
-    var is_dragging: boolean = false;
-    var offset: Vector2 | undefined = undefined;
+    let el_dragged: ElObj | SVGSVGElement | null = null;
+    let is_dragging: boolean = false;
+    let offset: Vector2 | undefined = undefined;
+    let shift = Vector2.zero();
 
-    const handle_mouse_move_El = throttle((e: MouseEvent) => {
-        if (is_dragging && el_dragged !== null) {
+    const handle_mouse_move = throttle((e: MouseEvent) => {
+        if (!is_dragging) return;
+        if (el_dragged instanceof ElObj) {
             el_dragged.move_to(get_coords(tree_app).sub(offset as Vector2).div(GRID_SIZE).round().scale(GRID_SIZE));
-        }
-    }, 16.67);
-
-    const handle_mouse_move_line = throttle((e: MouseEvent) => {
-        if (is_dragging && el_dragged !== null) {
             for (const [line_key, [line_type, other_el_key]] of el_dragged.childrens) {
                 const line = tree_app.pool.get(line_key) as ElBond;
                 const other_el = tree_app.pool.get(other_el_key as ElKey) as ElObj;
@@ -465,8 +465,16 @@ function set_normal_mode(tree_app: TreeApp): void {
                     line.move_to(other_el, el_dragged);
                 }
             }
+        } else if (el_dragged instanceof SVGSVGElement) {
+            shift = mouse_coords.sub(offset as Vector2).div(10);
+            tree_app.tree_grid.viewBox.baseVal.x -= shift.x;
+            tree_app.tree_grid.viewBox.baseVal.y -= shift.y;
         }
     }, 16.67);
+
+    const handle_mouse_move_grid = (e: MouseEvent) => {
+        if (!is_dragging) return;
+    };
 
     const handle_mouse_over = (e: MouseEvent) => {
         const obj = search_obj(tree_app, e.target as HTMLElement, 'draggable');
@@ -480,33 +488,54 @@ function set_normal_mode(tree_app: TreeApp): void {
     };
 
     const handle_mouse_down = (e: MouseEvent) => {
-        const obj_tmp = search_obj(tree_app, e.target as HTMLElement, 'draggable');
-        if (obj_tmp === null) return;
-        el_dragged = obj_tmp;
-        el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
-        is_dragging = true;
-        offset = get_coords(tree_app).sub(el_dragged.coords);
+        const target = e.target as HTMLElement;
+        if (target !== null && target.id === 'grid') {
+            el_dragged = tree_app.tree_grid;
+            is_dragging = true;
+            offset = new Vector2(mouse_coords.x, mouse_coords.y);
+        } else {
+            const obj_tmp = search_obj(tree_app, target, 'draggable');
+            if (obj_tmp !== null) {
+                el_dragged = obj_tmp;
+                el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
+                is_dragging = true;
+                offset = get_coords(tree_app).sub(el_dragged.coords);
+            }
+        }
     };
 
-    const handle_mouse_up = (e: MouseEvent) => {
+    const handle_mouse_up = async (e: MouseEvent) => {
         is_dragging = false;
-        if (el_dragged !== null) el_dragged.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
-        el_dragged = null;
-        offset = undefined;
+        if (el_dragged instanceof ElObj) {
+            el_dragged.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
+            el_dragged = null;
+            offset = undefined;
+        }
+        else if (el_dragged instanceof SVGSVGElement) {
+            el_dragged = null;
+            offset = undefined;
+            const epslon = 0.01;
+            let shift_tmp = new Vector2(shift.x, shift.y).scale(0.5);
+            for (let i = 0; Math.abs(shift_tmp.x) > epslon || Math.abs(shift_tmp.y) > epslon; shift_tmp = shift_tmp.scale(0.92), ++i) {
+                tree_app.tree_grid.viewBox.baseVal.x -= shift_tmp.x;
+                tree_app.tree_grid.viewBox.baseVal.y -= shift_tmp.y;
+                await sleep(15);
+            }
+        }
     };
 
     tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
     tree_app.tree_grid.addEventListener('mouseout',  handle_mouse_out);
     tree_app.tree_grid.addEventListener('mousedown', handle_mouse_down);
-    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move_El);
-    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move_line);
+    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
+    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move_grid);
     tree_app.tree_grid.addEventListener('mouseup',   handle_mouse_up);
 
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['mouseout',  handle_mouse_out]);
     tree_app.events.push(['mousedown', handle_mouse_down]);
-    tree_app.events.push(['mousemove', handle_mouse_move_El]);
-    tree_app.events.push(['mousemove', handle_mouse_move_line]);
+    tree_app.events.push(['mousemove', handle_mouse_move]);
+    tree_app.events.push(['mousemove', handle_mouse_move_grid]);
     tree_app.events.push(['mouseup',   handle_mouse_up]);
 }
 
@@ -901,6 +930,4 @@ if (document.readyState === "loading") {
 // https://blog.logrocket.com/creating-custom-mouse-cursor-css/
 //5) Arrastar o viewport com o mouse
 //6) UI-icones para zoom in and out
-//7) Aumentar a velocidade do panning quando muito em zoom out
-//8) Talvez inverter as teclas para padding
 //9) Implementar um sistema de undo e redo
