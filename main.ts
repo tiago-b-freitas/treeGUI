@@ -223,7 +223,6 @@ class ElObj {
         return smallest_v;
     }
     public is_outside(e_coords: Vector2): boolean {
-        // console.log(this.coords.x, e_coords.x, this.coords.y, e_coords.y);
         return  e_coords.x < this.coords.x
             ||  e_coords.x > this.coords.x + this.w 
             ||  e_coords.y < this.coords.y
@@ -351,7 +350,6 @@ function search_obj(tree_app: TreeApp, target: HTMLElement | null, target_class:
 let modes: [HTMLElement, ModeStrings, TypeElStrings][];
 let normal_mode
 
-
 let normal_mode_el: HTMLElement | null;
 let insert_obj_el:  HTMLElement | null; 
 let insert_bond_el: HTMLElement | null;
@@ -423,8 +421,8 @@ const handler_window_keyup_zoom_and_pan = (e: KeyboardEvent, tree_app: TreeApp) 
             tree_app.tree_grid.viewBox.baseVal.y = 0;
             tree_app.tree_grid.viewBox.baseVal.x = 0;
             break;
-        default:
-            console.log(e.code);
+        // default:
+        //     console.log(e.code);
     }
 };
 
@@ -596,9 +594,10 @@ function set_insert_mode_obj(tree_app: TreeApp, e: KeyboardEvent | null) {
     let obj: ElObj | null = null;
 
     const handle_mouse_move = (e: MouseEvent) => {
-        if (obj === null) return;
-        obj.move_to(get_coords(tree_app).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE));
-        is_putting = true;
+        if (obj !== null) {
+            obj.move_to(get_coords(tree_app).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE));
+            is_putting = true;
+        }
     };
 
     const handle_mouse_over = (e: MouseEvent) => {
@@ -633,7 +632,7 @@ function set_insert_mode_obj(tree_app: TreeApp, e: KeyboardEvent | null) {
         const coords = get_coords(tree_app).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE)
         obj = new ElObj(coords, OBJ_DIM, tree_app);
         tree_app.tmp_element = obj.el_key;
-        obj.move_to(coords);
+        // obj.move_to(coords);
         tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
         tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
     }
@@ -713,10 +712,12 @@ function set_insert_mode_text(tree_app: TreeApp) {
             obj.el_text.contentEditable = 'false';
             obj.el_text.style.padding = '';
             obj = null;
+            window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
+            window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
         } else {
             //TODO increase dim of Obj if text is large
             // @ts-ignore
-            console.log(obj.el_text.textContent.length);
+            // console.log(obj.el_text.textContent.length);
         }
     }
     tree_app.tree_grid.addEventListener('keyup', handle_key_up);
@@ -844,25 +845,26 @@ function initial_set_up(tree_app: TreeApp): void {
     window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
 }
 
-
-console.info("DOM loaded");
-const tree_grid = document.getElementById('tree_grid') as SVGSVGElement | null;
-if (tree_grid === null) throw new Error('No DOMElement with id `tree_grid` is found');
-const elements = document.getElementById('elements') as SVGGElement | null;
-if (elements === null) throw new Error('No DOMElement with id `elements` is found');
-var tree_app: TreeApp = {
-    tree_grid,
-    elements,
-    pool: new Pool(),
-    current_mode: "UNDEFINIED",
-    current_type_el: "UNDEFINIED",
-    events: [],
-    tmp_element: null,
-};
+let tree_app: TreeApp
 function main() {
+    console.info("DOM loaded");
+    const tree_grid = document.getElementById('tree_grid') as SVGSVGElement | null;
+    if (tree_grid === null) throw new Error('No DOMElement with id `tree_grid` is found');
+    const elements = document.getElementById('elements') as SVGGElement | null;
+    if (elements === null) throw new Error('No DOMElement with id `elements` is found');
+    tree_app = {
+        tree_grid,
+        elements,
+        pool: new Pool(),
+        current_mode: "UNDEFINIED",
+        current_type_el: "UNDEFINIED",
+        events: [],
+        tmp_element: null,
+    };
     switch_mode(tree_app, null, "INITIAL_MODE");
     console.log(`Starting in ${tree_app.current_mode}`);
     switch_mode(tree_app, null, "NORMAL_MODE");
+    if (normal_mode_el !== null) normal_mode_el.classList.add('active');
 }
 
 if (document.readyState === "loading") {
