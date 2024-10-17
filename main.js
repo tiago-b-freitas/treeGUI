@@ -111,7 +111,7 @@ class ElObj {
     right_point;
     top_point;
     bottom_point;
-    constructor(x, y, w, h) {
+    constructor(coords, dim, tree_app) {
         let group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         let rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         let foreignObj = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
@@ -123,16 +123,17 @@ class ElObj {
         this.el.appendChild(this.el_rect);
         this.el_text_wrapper.appendChild(this.el_text);
         this.el.appendChild(this.el_text_wrapper);
+        this.el_key = tree_app.pool.push(this, tree_app.elements);
         this.el_rect.setAttribute('x', '0');
         this.el_rect.setAttribute('y', '0');
         this.el_text_wrapper.setAttribute('x', '0');
         this.el_text_wrapper.setAttribute('y', '0');
-        this.el_text_wrapper.setAttribute('width', (OBJ_DIM.x).toString());
-        this.el_text_wrapper.setAttribute('height', (OBJ_DIM.y).toString());
+        this.el_text_wrapper.setAttribute('width', (dim.x).toString());
+        this.el_text_wrapper.setAttribute('height', (dim.y).toString());
         this.el_text.style.wordWrap = 'break-word';
         this.el_text.style.wordBreak = 'break-word';
-        this.el_text.style.width = `${(OBJ_DIM.x - 20)}px`;
-        this.el_text.style.height = `${(OBJ_DIM.y - 20)}px`;
+        this.el_text.style.width = `${(dim.x - 20)}px`;
+        this.el_text.style.height = `${(dim.y - 20)}px`;
         this.el_text.style.position = 'relative';
         this.el_text.style.top = '8px';
         this.el_text.style.left = '8px';
@@ -143,21 +144,21 @@ class ElObj {
         this.el_text.style.userSelect = 'none';
         this.el_text.textContent = STD_TEXT;
         this.has_text = false;
-        this.coords = new Vector2(x, y);
-        this.w = w;
-        this.el_rect.setAttribute('width', w.toString());
-        this.h = h;
-        this.el_rect.setAttribute('height', h.toString());
+        this.w = dim.x;
+        this.el_rect.setAttribute('width', this.w.toString());
+        this.h = dim.y;
+        this.el_rect.setAttribute('height', this.h.toString());
         this.el.setAttribute('fill', 'rgba(255, 255, 255, 0.3');
         this.el.setAttribute('stroke', 'black');
         this.el.classList.add('draggable');
         this.el.classList.add('obj');
+        this.coords = coords;
+        this.el.style.transform = `translate(${coords.x}px, ${coords.y}px)`;
         this.left_point = Vector2.zero();
         this.right_point = Vector2.zero();
         this.top_point = Vector2.zero();
         this.bottom_point = Vector2.zero();
-        this.start_points = [this.left_point, this.right_point, this.top_point, this.bottom_point];
-        this.move_to(this.coords);
+        this.start_points = this.get_start_points();
         this.childrens = new Map();
     }
     get_start_points() {
@@ -445,11 +446,6 @@ function set_normal_mode(tree_app) {
     tree_app.events.push(['mousemove', handle_mouse_move_line]);
     tree_app.events.push(['mouseup', handle_mouse_up]);
 }
-function create_obj(coords, OBJ_DIM, tree_app) {
-    const obj = new ElObj(coords.x, coords.y, OBJ_DIM.x, OBJ_DIM.y);
-    obj.el_key = tree_app.pool.push(obj, tree_app.elements);
-    return obj;
-}
 function create_line(tree_app, starter_obj, points) {
     const line = new ElLine(starter_obj, points);
     line.el_key = tree_app.pool.push(line, tree_app.elements);
@@ -473,15 +469,15 @@ function set_insert_mode_bond(tree_app) {
     let is_putting = false;
     const handle_mouse_over = (e) => {
         const target = e.target;
-        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable'))
-            return;
-        if (starter_obj === null || starter_obj.el_key !== Number(target.parentElement.getAttribute('el_key'))) {
-            target.parentElement.setAttribute('fill', OBJ_COLOR_ACTIVE);
+        const obj = search_obj(tree_app, target, 'obj');
+        if (obj !== null && (starter_obj === null || starter_obj.el_key !== obj.el_key)) {
+            obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
         }
     };
-    const handle_mouse_down = (e, tree_app) => {
+    const handle_mouse_down = (e) => {
         const target = e.target;
-        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable')) {
+        const obj = search_obj(tree_app, target, 'obj');
+        if (obj === null) {
             if (is_putting) {
                 is_putting = false;
                 if (starter_obj !== null) {
@@ -496,7 +492,6 @@ function set_insert_mode_bond(tree_app) {
             }
             return;
         }
-        const obj = tree_app.pool.get_from_svg(target.parentElement);
         if (is_putting && starter_obj !== null && line !== null) {
             line.move_to(starter_obj, obj);
             starter_obj.el.setAttribute('fill', OBJ_COLOR);
@@ -518,29 +513,24 @@ function set_insert_mode_bond(tree_app) {
     };
     const handle_mouse_move = throttle((e) => {
         if (is_putting && starter_obj !== null && line !== null) {
-            let mouse_coords = get_coords(tree_app);
-            line.move_to_insert_mode(starter_obj, mouse_coords, 50);
+            line.move_to_insert_mode(starter_obj, get_coords(tree_app), 50);
         }
     }, 16.67);
     const handle_mouse_out = (e) => {
         const target = e.target;
-        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable'))
-            return;
-        if (starter_obj === null || starter_obj.el_key !== Number(target.parentElement.getAttribute('el_key'))) {
-            target.parentElement.setAttribute('fill', OBJ_COLOR);
+        const obj = search_obj(tree_app, target, 'obj');
+        if (obj !== null && (starter_obj === null || starter_obj.el_key !== obj.el_key)) {
+            obj.el.setAttribute('fill', OBJ_COLOR);
         }
-    };
-    const wrapper_mouse_down = (e) => {
-        return handle_mouse_down(e, tree_app);
     };
     tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
     tree_app.tree_grid.addEventListener('mouseout', handle_mouse_out);
     tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
-    tree_app.tree_grid.addEventListener('mousedown', wrapper_mouse_down);
+    tree_app.tree_grid.addEventListener('mousedown', handle_mouse_down);
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['mouseout', handle_mouse_out]);
     tree_app.events.push(['mousemove', handle_mouse_move]);
-    tree_app.events.push(['mousedown', wrapper_mouse_down]);
+    tree_app.events.push(['mousedown', handle_mouse_down]);
 }
 function set_insert_mode_obj(tree_app, e) {
     let is_putting = false;
@@ -555,7 +545,7 @@ function set_insert_mode_obj(tree_app, e) {
     const handle_mouse_over = (e) => {
         if (obj === null) {
             const coords = get_coords(tree_app).sub(OBJ_DIM.div(2));
-            obj = create_obj(coords, OBJ_DIM, tree_app);
+            obj = new ElObj(coords, OBJ_DIM, tree_app);
             tree_app.tmp_element = obj.el_key;
             tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
             tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
@@ -580,7 +570,7 @@ function set_insert_mode_obj(tree_app, e) {
     tree_app.events.push(['mousemove', handle_mouse_move]);
     if (e !== null && e.code === 'KeyC') {
         const coords = get_coords(tree_app).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE);
-        obj = create_obj(coords, OBJ_DIM, tree_app);
+        obj = new ElObj(coords, OBJ_DIM, tree_app);
         tree_app.tmp_element = obj.el_key;
         obj.move_to(coords);
         tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
@@ -591,7 +581,7 @@ function set_insert_mode_text(tree_app) {
     let is_inserting = false;
     let obj = null;
     const handle_mouse_over = (e) => {
-        let target = e.target;
+        const target = e.target;
         const obj_tmp = search_obj(tree_app, target, 'obj');
         if (obj === null && obj_tmp !== null) {
             obj = obj_tmp;

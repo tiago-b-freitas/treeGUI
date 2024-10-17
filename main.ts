@@ -114,7 +114,7 @@ class ElObj {
     private right_point: Vector2;
     private top_point: Vector2;
     private bottom_point: Vector2;
-    constructor(x: number, y: number, w: number, h: number) {
+    constructor(coords: Vector2, dim: Vector2, tree_app: TreeApp) {
         let group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         let rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         let foreignObj = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
@@ -126,20 +126,21 @@ class ElObj {
         this.el.appendChild(this.el_rect);
         this.el_text_wrapper.appendChild(this.el_text);
         this.el.appendChild(this.el_text_wrapper);
+        this.el_key = tree_app.pool.push(this, tree_app.elements);
 
         this.el_rect.setAttribute('x', '0');
         this.el_rect.setAttribute('y', '0');
 
         this.el_text_wrapper.setAttribute('x', '0');
         this.el_text_wrapper.setAttribute('y', '0');
-        this.el_text_wrapper.setAttribute('width', (OBJ_DIM.x).toString());
-        this.el_text_wrapper.setAttribute('height', (OBJ_DIM.y).toString());
+        this.el_text_wrapper.setAttribute('width', (dim.x).toString());
+        this.el_text_wrapper.setAttribute('height', (dim.y).toString());
 
         // https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML
         this.el_text.style.wordWrap = 'break-word';
         this.el_text.style.wordBreak = 'break-word';
-        this.el_text.style.width = `${(OBJ_DIM.x-20)}px`;
-        this.el_text.style.height = `${(OBJ_DIM.y-20)}px`;
+        this.el_text.style.width = `${(dim.x-20)}px`;
+        this.el_text.style.height = `${(dim.y-20)}px`;
         this.el_text.style.position = 'relative';
         this.el_text.style.top = '8px';
         this.el_text.style.left = '8px';
@@ -152,23 +153,24 @@ class ElObj {
         this.el_text.textContent = STD_TEXT;
         this.has_text = false;
 
-        this.coords = new Vector2(x, y);
-        this.w = w;
-        this.el_rect.setAttribute('width', w.toString());
-        this.h = h;
-        this.el_rect.setAttribute('height', h.toString());
+        this.w = dim.x;
+        this.el_rect.setAttribute('width', this.w.toString());
+        this.h = dim.y;
+        this.el_rect.setAttribute('height', this.h.toString());
         
         this.el.setAttribute('fill', 'rgba(255, 255, 255, 0.3');
         this.el.setAttribute('stroke', 'black');
         this.el.classList.add('draggable');
         this.el.classList.add('obj');
 
+        this.coords = coords;
+        this.el.style.transform = `translate(${coords.x}px, ${coords.y}px)`;
+
         this.left_point   = Vector2.zero();
         this.right_point  = Vector2.zero();
         this.top_point    = Vector2.zero();
         this.bottom_point = Vector2.zero();
-        this.start_points = [this.left_point, this.right_point, this.top_point, this.bottom_point];
-        this.move_to(this.coords);
+        this.start_points = this.get_start_points();
 
         this.childrens = new Map();
     }
@@ -494,13 +496,6 @@ function set_normal_mode(tree_app: TreeApp): void {
     tree_app.events.push(['mouseup',   handle_mouse_up]);
 }
 
-function create_obj(coords: Vector2, OBJ_DIM: Vector2, tree_app: TreeApp): ElObj {
-    const obj = new ElObj(coords.x, coords.y, OBJ_DIM.x, OBJ_DIM.y);
-    obj.el_key = tree_app.pool.push(obj, tree_app.elements);
-
-    return obj;
-}
-
 function create_line(tree_app: TreeApp, starter_obj: Obj, points: Vector2): ElLine {
     const line = new ElLine(starter_obj, points);
     line.el_key = tree_app.pool.push(line, tree_app.elements);
@@ -526,17 +521,17 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
     let is_putting: boolean = false;
 
     const handle_mouse_over = (e: MouseEvent) => {
-        const target = e.target as SVGElement;
-        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable')) return;
-
-        if (starter_obj === null || starter_obj.el_key !== Number(target.parentElement.getAttribute('el_key'))) {
-            target.parentElement.setAttribute('fill', OBJ_COLOR_ACTIVE);
+        const target: HTMLElement | null = e.target as HTMLElement;
+        const obj = search_obj(tree_app, target, 'obj');
+        if (obj !== null && (starter_obj === null || starter_obj.el_key !== obj.el_key)) {
+            obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
         }
     };
 
-    const handle_mouse_down = (e: MouseEvent, tree_app: TreeApp) => {
-        const target = e.target as SVGElement;
-        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable')) {
+    const handle_mouse_down = (e: MouseEvent) => {
+        const target: HTMLElement | null = e.target as HTMLElement;
+        const obj = search_obj(tree_app, target, 'obj');
+        if (obj === null) {
             if (is_putting) {
                 is_putting = false;
                 if (starter_obj !== null) {
@@ -551,7 +546,6 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
             }
             return;
         }
-        const obj = tree_app.pool.get_from_svg(target.parentElement) as ElObj;
         if (is_putting && starter_obj !== null && line !== null) {
             line.move_to(starter_obj as ElObj, obj);
             starter_obj.el.setAttribute('fill', OBJ_COLOR);
@@ -573,33 +567,27 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
 
     const handle_mouse_move = throttle((e: MouseEvent) => {
         if (is_putting && starter_obj !== null && line !== null) {
-            let mouse_coords = get_coords(tree_app);
-            line.move_to_insert_mode(starter_obj, mouse_coords, 50);
+            line.move_to_insert_mode(starter_obj, get_coords(tree_app), 50);
         }
     }, 16.67);
 
     const handle_mouse_out = (e: MouseEvent) => {
-        const target = e.target as SVGElement;
-        if (target === null || target.parentElement === null || !target.parentElement.matches('.draggable')) return;
-
-        if (starter_obj === null || starter_obj.el_key !== Number(target.parentElement.getAttribute('el_key'))) {
-            target.parentElement.setAttribute('fill', OBJ_COLOR);
+        const target: HTMLElement | null = e.target as HTMLElement;
+        const obj = search_obj(tree_app, target, 'obj');
+        if (obj !== null && (starter_obj === null || starter_obj.el_key !== obj.el_key)) {
+            obj.el.setAttribute('fill', OBJ_COLOR);
         }
     };
-
-    const wrapper_mouse_down = (e: MouseEvent) => {
-        return handle_mouse_down(e, tree_app);
-    }
 
     tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
     tree_app.tree_grid.addEventListener('mouseout',  handle_mouse_out);
     tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
-    tree_app.tree_grid.addEventListener('mousedown', wrapper_mouse_down);
+    tree_app.tree_grid.addEventListener('mousedown', handle_mouse_down);
 
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['mouseout',  handle_mouse_out]);
     tree_app.events.push(['mousemove', handle_mouse_move]);
-    tree_app.events.push(['mousedown', wrapper_mouse_down]);
+    tree_app.events.push(['mousedown', handle_mouse_down]);
 }
 
 function set_insert_mode_obj(tree_app: TreeApp, e: KeyboardEvent | null) {
@@ -616,7 +604,7 @@ function set_insert_mode_obj(tree_app: TreeApp, e: KeyboardEvent | null) {
     const handle_mouse_over = (e: MouseEvent) => {
         if (obj === null) {
             const coords = get_coords(tree_app).sub(OBJ_DIM.div(2));
-            obj = create_obj(coords, OBJ_DIM, tree_app);
+            obj = new ElObj(coords, OBJ_DIM, tree_app);
             tree_app.tmp_element = obj.el_key;
             tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
             tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
@@ -643,7 +631,7 @@ function set_insert_mode_obj(tree_app: TreeApp, e: KeyboardEvent | null) {
 
     if (e !== null && e.code === 'KeyC') {
         const coords = get_coords(tree_app).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE)
-        obj = create_obj(coords, OBJ_DIM, tree_app);
+        obj = new ElObj(coords, OBJ_DIM, tree_app);
         tree_app.tmp_element = obj.el_key;
         obj.move_to(coords);
         tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
@@ -659,7 +647,7 @@ function set_insert_mode_text(tree_app: TreeApp) {
     // document.getElementsByTagName('body')[0].style.cursor = 'text';
 
     const handle_mouse_over = (e: MouseEvent) => {
-        let target: HTMLElement | null = e.target as HTMLElement;
+        const target: HTMLElement | null = e.target as HTMLElement;
         const obj_tmp: ElObj | null = search_obj(tree_app, target, 'obj');
         if (obj === null && obj_tmp !== null) {
             obj = obj_tmp;
