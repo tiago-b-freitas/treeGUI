@@ -74,11 +74,10 @@ class Vector2 {
     }
 }
 const OBJ_DIM = new Vector2(15 * GRID_SIZE, 6 * GRID_SIZE);
-class ElLine {
+class ElBond {
     el_key;
     el;
-    constructor(el0, el1) {
-        this.el_key = null;
+    constructor(el0, el1, tree_app) {
         this.el = (document.createElementNS('http://www.w3.org/2000/svg', 'line'));
         this.move_to(el0, el1);
         this.el.setAttribute('stroke', 'black');
@@ -86,6 +85,7 @@ class ElLine {
         this.el.setAttribute('marker-start', 'url(#dot)');
         this.el.setAttribute('marker-end', 'url(#triangle)');
         this.el.classList.add('draggable');
+        this.el_key = tree_app.pool.push(this, tree_app.elements);
     }
     move_to(el0, el1) {
         if (el1 instanceof ElObj) {
@@ -462,11 +462,6 @@ function set_normal_mode(tree_app) {
     tree_app.events.push(['mousemove', handle_mouse_move_line]);
     tree_app.events.push(['mouseup', handle_mouse_up]);
 }
-function create_line(tree_app, starter_obj, points) {
-    const line = new ElLine(starter_obj, points);
-    line.el_key = tree_app.pool.push(line, tree_app.elements);
-    return line;
-}
 const mouse_coords = Vector2.zero();
 const global_mouse_position = throttle((e) => {
     mouse_coords.set_xy(e.clientX, e.clientY);
@@ -500,7 +495,7 @@ function set_insert_mode_bond(tree_app) {
                     starter_obj.el.setAttribute('fill', OBJ_COLOR);
                     starter_obj = null;
                 }
-                if (line !== null && line.el_key !== null) {
+                if (line !== null) {
                     tree_app.pool.remove(line.el_key, tree_app.elements);
                     tree_app.tmps.pop();
                     line = null;
@@ -508,23 +503,31 @@ function set_insert_mode_bond(tree_app) {
             }
             return;
         }
-        if (is_putting && starter_obj !== null && line !== null) {
-            line.move_to(starter_obj, obj);
-            starter_obj.el.setAttribute('fill', OBJ_COLOR);
-            obj.el.setAttribute('fill', OBJ_COLOR);
-            starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
-            obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
-            tree_app.tmps.pop();
-            is_putting = false;
-            starter_obj = null;
-            line = null;
-        }
-        else {
+        if (!is_putting && starter_obj === null && line === null) {
             starter_obj = obj;
             starter_obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
-            line = create_line(tree_app, starter_obj, get_coords(tree_app));
+            line = new ElBond(starter_obj, get_coords(tree_app), tree_app);
             tree_app.tmps.push([TypeTmp.LINE, line.el_key]);
             is_putting = true;
+            return;
+        }
+        if (starter_obj !== null && line !== null) {
+            let is_bonded = false;
+            ;
+            for (const [_, other_obj_key] of starter_obj.childrens.values()) {
+                is_bonded = obj.el_key === other_obj_key;
+            }
+            if (!is_bonded) {
+                line.move_to(starter_obj, obj);
+                starter_obj.el.setAttribute('fill', OBJ_COLOR);
+                obj.el.setAttribute('fill', OBJ_COLOR);
+                starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
+                obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
+                tree_app.tmps.pop();
+                is_putting = false;
+                starter_obj = null;
+                line = null;
+            }
         }
     };
     const handle_mouse_move = throttle((e) => {

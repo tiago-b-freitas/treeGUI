@@ -31,10 +31,10 @@ enum TypeTmp {
     LINE,
 }
 
-type El = ElObj | ElLine;
+type El = ElObj | ElBond;
 type ModeStrings = keyof typeof Mode;
 type TypeElStrings = keyof typeof TypeEl;
-type ElKey = number | null;
+type ElKey = number;
 type LineType = 's' | 'e';
 type Tmp = [TypeTmp, ElKey][];
 
@@ -99,11 +99,10 @@ class Vector2 {
 
 const OBJ_DIM = new Vector2(15*GRID_SIZE, 6*GRID_SIZE);
 
-class ElLine {
+class ElBond {
     el_key: ElKey;
     el: SVGLineElement;
-    constructor(el0: ElObj, el1: ElObj | Vector2) {
-        this.el_key = null;
+    constructor(el0: ElObj, el1: ElObj | Vector2, tree_app: TreeApp) {
         this.el = (document.createElementNS('http://www.w3.org/2000/svg', 'line'));
         this.move_to(el0, el1);
         this.el.setAttribute('stroke', 'black');
@@ -111,6 +110,7 @@ class ElLine {
         this.el.setAttribute('marker-start', 'url(#dot)');
         this.el.setAttribute('marker-end', 'url(#triangle)');
         this.el.classList.add('draggable');
+        this.el_key = tree_app.pool.push(this, tree_app.elements);
     }
     public move_to(el0: ElObj, el1: ElObj | Vector2): void {
         if (el1 instanceof ElObj) {
@@ -456,7 +456,7 @@ function set_normal_mode(tree_app: TreeApp): void {
     const handle_mouse_move_line = throttle((e: MouseEvent) => {
         if (is_dragging && el_dragged !== null) {
             for (const [line_key, [line_type, other_el_key]] of el_dragged.childrens) {
-                const line = tree_app.pool.get(line_key) as ElLine;
+                const line = tree_app.pool.get(line_key) as ElBond;
                 const other_el = tree_app.pool.get(other_el_key as ElKey) as ElObj;
                 if (line_type === 's') {
                     line.move_to(el_dragged, other_el); 
@@ -509,12 +509,6 @@ function set_normal_mode(tree_app: TreeApp): void {
     tree_app.events.push(['mouseup',   handle_mouse_up]);
 }
 
-function create_line(tree_app: TreeApp, starter_obj: ElObj, points: Vector2): ElLine {
-    const line = new ElLine(starter_obj, points);
-    line.el_key = tree_app.pool.push(line, tree_app.elements);
-    return line;
-}
-
 const mouse_coords = Vector2.zero(); 
 const global_mouse_position = throttle((e: MouseEvent) => {
     mouse_coords.set_xy(e.clientX, e.clientY);
@@ -530,7 +524,7 @@ function get_coords(tree_app: TreeApp): Vector2 {
 
 function set_insert_mode_bond(tree_app: TreeApp): void {
     let starter_obj: ElObj | null = null;
-    let line: ElLine | null = null;
+    let line: ElBond | null = null;
     let is_putting: boolean = false;
 
     const handle_mouse_over = (e: MouseEvent) => {
@@ -551,7 +545,7 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
                     starter_obj.el.setAttribute('fill', OBJ_COLOR);
                     starter_obj = null;
                 }
-                if (line !== null && line.el_key !== null) {
+                if (line !== null) {
                     tree_app.pool.remove(line.el_key, tree_app.elements);
                     tree_app.tmps.pop();
                     line = null;
@@ -559,22 +553,30 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
             }
             return;
         }
-        if (is_putting && starter_obj !== null && line !== null) {
-            line.move_to(starter_obj as ElObj, obj);
-            starter_obj.el.setAttribute('fill', OBJ_COLOR);
-            obj.el.setAttribute('fill', OBJ_COLOR);
-            starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
-            obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
-            tree_app.tmps.pop();
-            is_putting = false;
-            starter_obj = null;
-            line = null;
-        } else {
+        if (!is_putting && starter_obj === null && line === null) {
             starter_obj = obj;
             starter_obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
-            line = create_line(tree_app, starter_obj as ElObj, get_coords(tree_app));
+            line = new ElBond(starter_obj, get_coords(tree_app), tree_app);
             tree_app.tmps.push([TypeTmp.LINE, line.el_key]);
             is_putting = true;
+            return;
+        }
+        if (starter_obj !== null && line !== null) {
+            let is_bonded: boolean = false;;
+            for (const [_, other_obj_key] of starter_obj.childrens.values()) {
+                is_bonded = obj.el_key === other_obj_key;
+            }
+            if (!is_bonded) {
+                line.move_to(starter_obj as ElObj, obj);
+                starter_obj.el.setAttribute('fill', OBJ_COLOR);
+                obj.el.setAttribute('fill', OBJ_COLOR);
+                starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
+                obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
+                tree_app.tmps.pop();
+                is_putting = false;
+                starter_obj = null;
+                line = null;
+            }
         }
     };
 
@@ -891,16 +893,13 @@ if (document.readyState === "loading") {
     main();
 }
 //TODO 
-//1) Verificar se já não há um vínculo entre dois objetos
-//2) increase dim of Obj if text is large
-//3) Botão e função para deletar objetos e vínculos
-//4) Implementar no modo normal uma maneira de mover vínculos, em cada uma das pontas, seja na saída seja na entrada
-//5) Adicionar um cursor customizado para cada uma das funções do menu
+//1) increase dim of Obj if text is large
+//2) Botão e função para deletar objetos e vínculos
+//3) Implementar no modo normal uma maneira de mover vínculos, em cada uma das pontas, seja na saída seja na entrada
+//4) Adicionar um cursor customizado para cada uma das funções do menu
 // https://blog.logrocket.com/creating-custom-mouse-cursor-css/
-//6) Arrastar o viewport com o mouse
-//7) UI-icones para zoom in and out
-//8) Aumentar a velocidade do panning quando muito em zoom out
-//9) Talvez inverter as teclas para padding
-//10) A ideia do starter_points é um pouco idiota e não ajuda nada na performance
-//11) Implementar um sistema de undo e redo
-//12) create a rect in create_mode with keyboard
+//5) Arrastar o viewport com o mouse
+//6) UI-icones para zoom in and out
+//7) Aumentar a velocidade do panning quando muito em zoom out
+//8) Talvez inverter as teclas para padding
+//9) Implementar um sistema de undo e redo
