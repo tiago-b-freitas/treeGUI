@@ -8,6 +8,7 @@ const BOARD_SIZE_Y  = MAX_GRID_Y*GRID_SIZE*5;
 const OBJ_COLOR = '#f2f2e2';
 const OBJ_COLOR_ACTIVE = '#ffffee'
 const OBJ_COLOR_MOVE = '#fffff0a0'
+const PAN_SPEED = 5;
 const SCALE_FACTOR = 1.5;
 const STD_TEXT = 'Insira o texto aqui';
 
@@ -421,16 +422,16 @@ const handler_window_keyup_zoom_and_pan = (e: KeyboardEvent, tree_app: TreeApp) 
             tree_app.tree_grid.viewBox.baseVal.y += h_tmp*(1-SCALE_FACTOR)/2;
             break;
         case 'ArrowUp':
-            tree_app.tree_grid.viewBox.baseVal.y += GRID_SIZE;
+            tree_app.tree_grid.viewBox.baseVal.y -= GRID_SIZE*PAN_SPEED;
             break;
         case 'ArrowDown':
-            tree_app.tree_grid.viewBox.baseVal.y -= GRID_SIZE;
+            tree_app.tree_grid.viewBox.baseVal.y += GRID_SIZE*PAN_SPEED;
             break;
         case 'ArrowRight':
-            tree_app.tree_grid.viewBox.baseVal.x -= GRID_SIZE;
+            tree_app.tree_grid.viewBox.baseVal.x += GRID_SIZE*PAN_SPEED;
             break;
         case 'ArrowLeft':
-            tree_app.tree_grid.viewBox.baseVal.x += GRID_SIZE;
+            tree_app.tree_grid.viewBox.baseVal.x -= GRID_SIZE*PAN_SPEED;
             break;
         case 'KeyZ':
             tree_app.tree_grid.viewBox.baseVal.y = 0;
