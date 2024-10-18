@@ -1,6 +1,6 @@
 // https://developer.mozilla.org/en-US/docs/Web/API/SVG_API
-const MAX_GRID_X  = 40;
-const MAX_GRID_Y  = 30;
+const MAX_GRID_X  = 100;
+const MAX_GRID_Y  = 100;
 const GRID_SIZE   = 20;
 const BOARD_SIZE_X  = MAX_GRID_X*GRID_SIZE*5;
 const BOARD_SIZE_Y  = MAX_GRID_Y*GRID_SIZE*5;
@@ -10,6 +10,7 @@ const OBJ_COLOR_ACTIVE = '#ffffee'
 const OBJ_COLOR_MOVE = '#fffff0a0'
 const PAN_SPEED = 5;
 const SCALE_FACTOR = 1.5;
+const D_SCALE_FACTOR = 0.9
 const STD_TEXT = 'Insira o texto aqui';
 
 type Events = [string, any][];
@@ -90,11 +91,14 @@ class Vector2 {
         const tmp_matrix = this.matrix.multiply(other_matrix);
         return new Vector2(tmp_matrix.a, tmp_matrix.d);
     }
-    public set_xy(x: number, y: number) {
+    public set_xy(x: number, y: number): void {
         this.matrix.a = x;
         this.matrix.d = y;
         this.x = x;
         this.y = y;
+    }
+    public set_from_vector(v: Vector2): void {
+        this.set_xy(v.x, v.y);
     }
 }
 
@@ -149,14 +153,9 @@ class ElObj {
     el_key: ElKey = -1;
     childrens: Map<ElKey, [LineType, ElKey | null]>;
     public coords: Vector2; 
-    public w: number;
-    public h: number;
+    public size: Vector2;
     private start_points: StartPoints;
-    private left_point: Vector2;
-    private right_point: Vector2;
-    private top_point: Vector2;
-    private bottom_point: Vector2;
-    constructor(coords: Vector2, dim: Vector2, tree_app: TreeApp) {
+    constructor(coords: Vector2, size: Vector2, tree_app: TreeApp) {
         let group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         let rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         let foreignObj = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
@@ -175,14 +174,14 @@ class ElObj {
 
         this.el_text_wrapper.setAttribute('x', '0');
         this.el_text_wrapper.setAttribute('y', '0');
-        this.el_text_wrapper.setAttribute('width', (dim.x).toString());
-        this.el_text_wrapper.setAttribute('height', (dim.y).toString());
+        this.el_text_wrapper.setAttribute('width', (size.x).toString());
+        this.el_text_wrapper.setAttribute('height', (size.y).toString());
 
         // https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML
         this.el_text.style.wordWrap = 'break-word';
         this.el_text.style.wordBreak = 'break-word';
-        this.el_text.style.width = `${(dim.x-20)}px`;
-        this.el_text.style.height = `${(dim.y-20)}px`;
+        this.el_text.style.width = `${(size.x-20)}px`;
+        this.el_text.style.height = `${(size.y-20)}px`;
         this.el_text.style.position = 'relative';
         this.el_text.style.top = '8px';
         this.el_text.style.left = '8px';
@@ -195,10 +194,9 @@ class ElObj {
         this.el_text.textContent = STD_TEXT;
         this.has_text = false;
 
-        this.w = dim.x;
-        this.el_rect.setAttribute('width', this.w.toString());
-        this.h = dim.y;
-        this.el_rect.setAttribute('height', this.h.toString());
+        this.size = size;
+        this.el_rect.setAttribute('width', this.size.x.toString());
+        this.el_rect.setAttribute('height', this.size.y.toString());
         
         this.el.setAttribute('fill', 'rgba(255, 255, 255, 0.3');
         this.el.setAttribute('stroke', 'black');
@@ -208,28 +206,29 @@ class ElObj {
         this.coords = coords;
         this.el.style.transform = `translate(${coords.x}px, ${coords.y}px)`;
 
-        this.left_point   = Vector2.zero();
-        this.right_point  = Vector2.zero();
-        this.top_point    = Vector2.zero();
-        this.bottom_point = Vector2.zero();
         this.start_points = this.get_start_points();
 
         this.childrens = new Map();
     }
     private get_start_points(): StartPoints {
-        this.left_point.x = this.coords.x;
-        this.left_point.y = this.coords.y + this.h/2;
+        const left_point   = Vector2.zero();
+        const right_point  = Vector2.zero();
+        const top_point    = Vector2.zero();
+        const bottom_point = Vector2.zero();
 
-        this.right_point.x  = this.coords.x + this.w; 
-        this.right_point.y  = this.coords.y + this.h/2;
+        left_point.x   = this.coords.x;
+        left_point.y   = this.coords.y + this.size.y/2;
 
-        this.top_point.x    = this.coords.x + this.w/2;
-        this.top_point.y    = this.coords.y;
+        right_point.x  = this.coords.x + this.size.x; 
+        right_point.y  = this.coords.y + this.size.y/2;
 
-        this.bottom_point.x = this.coords.x + this.w/2;
-        this.bottom_point.y = this.coords.y + this.h;
+        top_point.x    = this.coords.x + this.size.x/2;
+        top_point.y    = this.coords.y;
 
-        return [this.left_point, this.right_point, this.top_point, this.bottom_point];
+        bottom_point.x = this.coords.x + this.size.x/2;
+        bottom_point.y = this.coords.y + this.size.y;
+
+        return [left_point, right_point, top_point, bottom_point];
     }
     public move_to(coords: Vector2): void {
         this.el.style.transform = `translate(${coords.x}px, ${coords.y}px)`;
@@ -266,9 +265,9 @@ class ElObj {
     }
     public is_outside(e_coords: Vector2): boolean {
         return  e_coords.x < this.coords.x
-            ||  e_coords.x > this.coords.x + this.w 
+            ||  e_coords.x > this.coords.x + this.size.x 
             ||  e_coords.y < this.coords.y
-            ||  e_coords.y > this.coords.y + this.h;
+            ||  e_coords.y > this.coords.y + this.size.y;
     }
 }
 
@@ -449,12 +448,13 @@ function sleep(ms: number) {
 function set_normal_mode(tree_app: TreeApp): void {
     let el_dragged: ElObj | SVGSVGElement | null = null;
     let is_dragging: boolean = false;
-    let offset: Vector2 | undefined = undefined;
-    let shift = Vector2.zero();
+    const offset = Vector2.zero();
+    const displacement = Vector2.zero();
 
     const handle_mouse_move = throttle((e: MouseEvent) => {
         if (!is_dragging) return;
         if (el_dragged instanceof ElObj) {
+            el_dragged.el.style.cursor = 'grabbing';
             el_dragged.move_to(get_coords(tree_app).sub(offset as Vector2).div(GRID_SIZE).round().scale(GRID_SIZE));
             for (const [line_key, [line_type, other_el_key]] of el_dragged.childrens) {
                 const line = tree_app.pool.get(line_key) as ElBond;
@@ -466,9 +466,11 @@ function set_normal_mode(tree_app: TreeApp): void {
                 }
             }
         } else if (el_dragged instanceof SVGSVGElement) {
-            shift = mouse_coords.sub(offset as Vector2).div(10);
-            tree_app.tree_grid.viewBox.baseVal.x -= shift.x;
-            tree_app.tree_grid.viewBox.baseVal.y -= shift.y;
+            tree_app.tree_grid.style.cursor = 'grabbing';
+            displacement.set_from_vector(mouse_coords.sub(offset));
+            offset.set_from_vector(mouse_coords);
+            tree_app.tree_grid.viewBox.baseVal.x -= displacement.x;
+            tree_app.tree_grid.viewBox.baseVal.y -= displacement.y;
         }
     }, 16.67);
 
@@ -492,33 +494,35 @@ function set_normal_mode(tree_app: TreeApp): void {
         if (target !== null && target.id === 'grid') {
             el_dragged = tree_app.tree_grid;
             is_dragging = true;
-            offset = new Vector2(mouse_coords.x, mouse_coords.y);
+            offset.set_from_vector(mouse_coords);
         } else {
             const obj_tmp = search_obj(tree_app, target, 'draggable');
             if (obj_tmp !== null) {
                 el_dragged = obj_tmp;
                 el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
                 is_dragging = true;
-                offset = get_coords(tree_app).sub(el_dragged.coords);
+                offset.set_from_vector(get_coords(tree_app).sub(el_dragged.coords));
             }
         }
     };
 
     const handle_mouse_up = async (e: MouseEvent) => {
-        is_dragging = false;
         if (el_dragged instanceof ElObj) {
             el_dragged.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
-            el_dragged = null;
-            offset = undefined;
+            el_dragged.el.style.cursor = 'pointer';
         }
-        else if (el_dragged instanceof SVGSVGElement) {
-            el_dragged = null;
-            offset = undefined;
+        const is_svg = el_dragged instanceof SVGSVGElement;
+        el_dragged = null;
+        offset.set_xy(0, 0);
+        is_dragging = false;
+        let d = new Vector2(displacement.x, displacement.y).scale(D_SCALE_FACTOR);
+        displacement.set_xy(0, 0)
+        if (is_svg) {
+            tree_app.tree_grid.style.cursor = 'default';
             const epslon = 0.01;
-            let shift_tmp = new Vector2(shift.x, shift.y).scale(0.5);
-            for (let i = 0; Math.abs(shift_tmp.x) > epslon || Math.abs(shift_tmp.y) > epslon; shift_tmp = shift_tmp.scale(0.92), ++i) {
-                tree_app.tree_grid.viewBox.baseVal.x -= shift_tmp.x;
-                tree_app.tree_grid.viewBox.baseVal.y -= shift_tmp.y;
+            for (; Math.abs(d.x) > epslon || Math.abs(d.y) > epslon; d = d.scale(D_SCALE_FACTOR)) {
+                tree_app.tree_grid.viewBox.baseVal.x -= d.x;
+                tree_app.tree_grid.viewBox.baseVal.y -= d.y;
                 await sleep(15);
             }
         }
@@ -540,9 +544,9 @@ function set_normal_mode(tree_app: TreeApp): void {
 }
 
 const mouse_coords = Vector2.zero(); 
-const global_mouse_position = throttle((e: MouseEvent) => {
+const global_mouse_position = (e: MouseEvent) => {
     mouse_coords.set_xy(e.clientX, e.clientY);
-}, 20);
+};
 window.addEventListener('mousemove', global_mouse_position);
 
 function get_coords(tree_app: TreeApp): Vector2 {
@@ -642,7 +646,7 @@ function set_insert_mode_obj(tree_app: TreeApp, e: KeyboardEvent | null) {
 
     const handle_mouse_move = (e: MouseEvent) => {
         if (obj !== null) {
-            obj.move_to(get_coords(tree_app).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE));
+            obj.move_to(get_coords(tree_app).sub(obj.size.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE));
             is_putting = true;
         }
     };
@@ -928,6 +932,6 @@ if (document.readyState === "loading") {
 //3) Implementar no modo normal uma maneira de mover vínculos, em cada uma das pontas, seja na saída seja na entrada
 //4) Adicionar um cursor customizado para cada uma das funções do menu
 // https://blog.logrocket.com/creating-custom-mouse-cursor-css/
-//5) Arrastar o viewport com o mouse
-//6) UI-icones para zoom in and out
-//9) Implementar um sistema de undo e redo
+//6) UI-icones para zoom in and out e home;
+//7) Implementar um sistema de undo e redo
+//8) Botao Z, go to home, i.é, zoom 1:1 e centro da tela, a posição inicial.
