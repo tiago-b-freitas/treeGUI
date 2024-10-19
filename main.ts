@@ -40,14 +40,29 @@ type ElKey = number;
 type LineType = 's' | 'e';
 type Tmp = [TypeTmp, ElKey][];
 
+type Limits = {
+    readonly max_zoom_in: number,
+    readonly max_zoom_out: number,
+}
+
+type ZoomPanNames = "zoom_level" | "pan_x" | "pan_y";
+type ZoomPanHolder = Record<ZoomPanNames, number>;
+
+type CurrentState = {
+    active_obj: ElKey | null,
+    zoom_pan_state: ZoomPanHolder,
+}
+
 type TreeApp = {
     tree_grid: SVGSVGElement,
     elements: SVGGElement,
     pool: Pool,
     current_mode: ModeStrings,
     current_type_el: TypeElStrings | undefined;
+    current_state: CurrentState,
     events: Events,
     tmps: Tmp,
+    limits: Limits,
 }
 type ElPool = Map<ElKey, El>;
 
@@ -398,27 +413,51 @@ const handler_window_keyup_switch_modes = (e: KeyboardEvent, tree_app: TreeApp) 
     }
 };
 
+function reset_zoom_and_pan(tree_app: TreeApp): void {
+    const screen_w  = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
+    const screen_h = window.innerHeight|| document.documentElement.clientHeight|| document.body.clientHeight;
+    const x = Math.floor((BOARD_SIZE_X - screen_w) / 2);
+    const y = Math.floor((BOARD_SIZE_Y - screen_h) / 2);
+    tree_app.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
+    tree_app.tree_grid.setAttribute('width', screen_w.toString());
+    tree_app.tree_grid.setAttribute('height', screen_h.toString());
+    tree_app.current_state.zoom_pan_state.zoom_level = 0;
+}
+
+function zoom_in(tree_app: TreeApp): void {
+    if (tree_app.current_state.zoom_pan_state.zoom_level < tree_app.limits.max_zoom_in) {
+        tree_app.current_state.zoom_pan_state.zoom_level += 1;
+        const w = tree_app.tree_grid.viewBox.baseVal.width;
+        const h = tree_app.tree_grid.viewBox.baseVal.height;
+        tree_app.tree_grid.viewBox.baseVal.width /= SCALE_FACTOR;
+        tree_app.tree_grid.viewBox.baseVal.height /= SCALE_FACTOR;
+        tree_app.tree_grid.viewBox.baseVal.x += w/(SCALE_FACTOR*4);
+        tree_app.tree_grid.viewBox.baseVal.y += h/(SCALE_FACTOR*4);
+    }
+}
+
+function zoom_out(tree_app: TreeApp): void {
+    if (tree_app.current_state.zoom_pan_state.zoom_level > tree_app.limits.max_zoom_out) {
+        tree_app.current_state.zoom_pan_state.zoom_level -= 1;
+        const w = tree_app.tree_grid.viewBox.baseVal.width;
+        const h = tree_app.tree_grid.viewBox.baseVal.height;
+        tree_app.tree_grid.viewBox.baseVal.width *= SCALE_FACTOR;
+        tree_app.tree_grid.viewBox.baseVal.height *= SCALE_FACTOR;
+        tree_app.tree_grid.viewBox.baseVal.x += w*(1-SCALE_FACTOR)/2;
+        tree_app.tree_grid.viewBox.baseVal.y += h*(1-SCALE_FACTOR)/2;
+    }
+}
+
 const wrapper_handler_window_keyup_zoom_and_pan = (e: KeyboardEvent) => {
     handler_window_keyup_zoom_and_pan(e, tree_app);
 };
 const handler_window_keyup_zoom_and_pan = (e: KeyboardEvent, tree_app: TreeApp) => {
-    let w_tmp, h_tmp;
     switch (e.code) {
         case 'Backslash':
-            w_tmp = tree_app.tree_grid.viewBox.baseVal.width;
-            h_tmp = tree_app.tree_grid.viewBox.baseVal.height;
-            tree_app.tree_grid.viewBox.baseVal.width /= SCALE_FACTOR;
-            tree_app.tree_grid.viewBox.baseVal.height /= SCALE_FACTOR;
-            tree_app.tree_grid.viewBox.baseVal.x += w_tmp/(SCALE_FACTOR*4);
-            tree_app.tree_grid.viewBox.baseVal.y += h_tmp/(SCALE_FACTOR*4);
+            zoom_in(tree_app);
             break;
         case 'BracketRight':
-            w_tmp = tree_app.tree_grid.viewBox.baseVal.width;
-            h_tmp = tree_app.tree_grid.viewBox.baseVal.height;
-            tree_app.tree_grid.viewBox.baseVal.width *= SCALE_FACTOR;
-            tree_app.tree_grid.viewBox.baseVal.height *= SCALE_FACTOR;
-            tree_app.tree_grid.viewBox.baseVal.x += w_tmp*(1-SCALE_FACTOR)/2;
-            tree_app.tree_grid.viewBox.baseVal.y += h_tmp*(1-SCALE_FACTOR)/2;
+            zoom_out(tree_app);
             break;
         case 'ArrowUp':
             tree_app.tree_grid.viewBox.baseVal.y -= GRID_SIZE*PAN_SPEED;
@@ -432,12 +471,9 @@ const handler_window_keyup_zoom_and_pan = (e: KeyboardEvent, tree_app: TreeApp) 
         case 'ArrowLeft':
             tree_app.tree_grid.viewBox.baseVal.x -= GRID_SIZE*PAN_SPEED;
             break;
-        case 'KeyZ':
-            tree_app.tree_grid.viewBox.baseVal.y = 0;
-            tree_app.tree_grid.viewBox.baseVal.x = 0;
+        case 'KeyH':
+            reset_zoom_and_pan(tree_app);
             break;
-        // default:
-        //     console.log(e.code);
     }
 };
 
@@ -796,7 +832,7 @@ function switch_mode(tree_app: TreeApp, e: KeyboardEvent | null, mode: ModeStrin
 
     switch (Mode[mode]) {
         case Mode.INITIAL_MODE:
-            initial_set_up(tree_app);
+            set_initial_mode(tree_app);
             break;
         case Mode.NORMAL_MODE:
             set_normal_mode(tree_app);
@@ -828,7 +864,7 @@ function switch_mode(tree_app: TreeApp, e: KeyboardEvent | null, mode: ModeStrin
 }
 
 
-function initial_set_up(tree_app: TreeApp): void {
+function set_initial_mode(tree_app: TreeApp): void {
     const screen_w  = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
     const screen_h = window.innerHeight|| document.documentElement.clientHeight|| document.body.clientHeight;
     const x = Math.floor((BOARD_SIZE_X - screen_w) / 2);
@@ -838,8 +874,7 @@ function initial_set_up(tree_app: TreeApp): void {
     tree_app.tree_grid.setAttribute('height', screen_h.toString());
 
     const grid_pat = document.getElementById('grid-pat');
-    //TODO
-    if (grid_pat === null) throw new Error('');
+    if (grid_pat === null) throw new Error('HTML element with ID `grid-pat` not found!');
     grid_pat.setAttribute('width', (GRID_SIZE*2).toString());
     grid_pat.setAttribute('height', (GRID_SIZE*2).toString());
 
@@ -858,7 +893,6 @@ function initial_set_up(tree_app: TreeApp): void {
     const menu_grid = document.getElementById('menu-grid');
     if (menu_grid === null) throw new Error('HTML element with ID `menu-grid` is not found!');
     menu_grid.style.top = ((screen_h-Number(menu_grid.getAttribute('height')))/2).toString();
-
 
     window.addEventListener('resize', (event) => {{
         const screen_w  = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
@@ -895,26 +929,79 @@ function initial_set_up(tree_app: TreeApp): void {
         });
     }
 
+    const home_el = document.getElementById('home')
+    if (home_el === null) throw new Error('Id `home` not found');
+    const zoom_in_el = document.getElementById('zoom-in')
+    if (zoom_in_el === null) throw new Error('ID `zoom-in` is not found!');
+    const zoom_out_el = document.getElementById('zoom-out')
+    if (zoom_out_el === null) throw new Error('Id `zoom-out` not found');
+
+    home_el.addEventListener('click', (e) => {
+        reset_zoom_and_pan(tree_app);
+    });
+    zoom_in_el.addEventListener('click', (e) => {
+        zoom_in(tree_app);
+    });
+    zoom_out_el.addEventListener('click', (e) => {
+        zoom_out(tree_app);
+    });
+
+
     window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
     window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
+
 }
 
-let tree_app: TreeApp
+let tree_app: TreeApp;
 function main() {
     console.info("DOM loaded");
     const tree_grid = document.getElementById('tree_grid') as SVGSVGElement | null;
     if (tree_grid === null) throw new Error('No DOMElement with id `tree_grid` is found');
     const elements = document.getElementById('elements') as SVGGElement | null;
     if (elements === null) throw new Error('No DOMElement with id `elements` is found');
+    const zoom_pan_holder: ZoomPanHolder = {
+        zoom_level: 0,
+        pan_x: 0,
+        pan_y: 0,
+    };
+    let zoom_pan_state = new Proxy( zoom_pan_holder, {
+        set(target: ZoomPanHolder, property: ZoomPanNames, value: number): boolean {
+            target[property] = value;
+            if (property == 'pan_x') {
+                tree_grid.viewBox.baseVal.x = value;
+            } else if (property == 'pan_y') {
+                tree_grid.viewBox.baseVal.y = value;
+            } else if (property === 'zoom_level') {
+                const home_icon = document.getElementById('home');
+                if (home_icon === null) throw new Error('Could not found id `home`in document!');
+                if (value) {
+                    home_icon.style.display = 'inline';
+                } else {
+                    home_icon.style.display = 'none';
+                }
+            }
+            return true;
+        },
+    });
+
     tree_app = {
         tree_grid,
         elements,
         pool: new Pool(),
         current_mode: "UNDEFINIED",
         current_type_el: "UNDEFINIED",
+        current_state: {
+            active_obj: null,
+            zoom_pan_state: zoom_pan_state,
+        },
         events: [],
         tmps: [],
+        limits: {
+            max_zoom_out: -4,
+            max_zoom_in:   4,
+        }
     };
+
     switch_mode(tree_app, null, "INITIAL_MODE");
     console.log(`Starting in ${tree_app.current_mode}`);
     switch_mode(tree_app, null, "NORMAL_MODE");
@@ -935,3 +1022,10 @@ if (document.readyState === "loading") {
 //6) UI-icones para zoom in and out e home;
 //7) Implementar um sistema de undo e redo
 //8) Botao Z, go to home, i.é, zoom 1:1 e centro da tela, a posição inicial.
+//9) Keep bond line more close of mouse
+//10) ver se é possível corrigir o erro de o cursor do mouse aparecer embaixo quando clica para editar no modo texto
+//11) Adicionar o esc para cancelar o texto no modo texto
+//12) mouse muito lento quando em excessivo zoom out 
+//13) zoom in and zoom out com o mouse wheel
+//14) deixar os icones do menu principal em cinza quando não utilizados
+//15) bug no modo de inserir texto, quando um texto está ativo e eu clico em outro obj, eu preciso sair do obj para ativar a inserção.
