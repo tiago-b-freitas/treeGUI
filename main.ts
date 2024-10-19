@@ -45,7 +45,7 @@ type Limits = {
     readonly max_zoom_out: number,
 }
 
-type ZoomPanNames = "zoom_level" | "pan_x" | "pan_y";
+type ZoomPanNames = 'zoom_level' | 'pan_x' | 'pan_y';
 type ZoomPanHolder = Record<ZoomPanNames, number>;
 
 type CurrentState = {
@@ -431,8 +431,8 @@ function zoom_in(tree_app: TreeApp): void {
         const h = tree_app.tree_grid.viewBox.baseVal.height;
         tree_app.tree_grid.viewBox.baseVal.width /= SCALE_FACTOR;
         tree_app.tree_grid.viewBox.baseVal.height /= SCALE_FACTOR;
-        tree_app.tree_grid.viewBox.baseVal.x += w/(SCALE_FACTOR*4);
-        tree_app.tree_grid.viewBox.baseVal.y += h/(SCALE_FACTOR*4);
+        tree_app.current_state.zoom_pan_state.pan_x += w/(SCALE_FACTOR*4);
+        tree_app.current_state.zoom_pan_state.pan_y += h/(SCALE_FACTOR*4);
     }
 }
 
@@ -443,8 +443,8 @@ function zoom_out(tree_app: TreeApp): void {
         const h = tree_app.tree_grid.viewBox.baseVal.height;
         tree_app.tree_grid.viewBox.baseVal.width *= SCALE_FACTOR;
         tree_app.tree_grid.viewBox.baseVal.height *= SCALE_FACTOR;
-        tree_app.tree_grid.viewBox.baseVal.x += w*(1-SCALE_FACTOR)/2;
-        tree_app.tree_grid.viewBox.baseVal.y += h*(1-SCALE_FACTOR)/2;
+        tree_app.current_state.zoom_pan_state.pan_x += w*(1-SCALE_FACTOR)/2;
+        tree_app.current_state.zoom_pan_state.pan_y += h*(1-SCALE_FACTOR)/2;
     }
 }
 
@@ -460,16 +460,16 @@ const handler_window_keyup_zoom_and_pan = (e: KeyboardEvent, tree_app: TreeApp) 
             zoom_out(tree_app);
             break;
         case 'ArrowUp':
-            tree_app.tree_grid.viewBox.baseVal.y -= GRID_SIZE*PAN_SPEED;
+            tree_app.current_state.zoom_pan_state.pan_y -= GRID_SIZE*PAN_SPEED;
             break;
         case 'ArrowDown':
-            tree_app.tree_grid.viewBox.baseVal.y += GRID_SIZE*PAN_SPEED;
+            tree_app.current_state.zoom_pan_state.pan_y += GRID_SIZE*PAN_SPEED;
             break;
         case 'ArrowRight':
-            tree_app.tree_grid.viewBox.baseVal.x += GRID_SIZE*PAN_SPEED;
+            tree_app.current_state.zoom_pan_state.pan_x += GRID_SIZE*PAN_SPEED;
             break;
         case 'ArrowLeft':
-            tree_app.tree_grid.viewBox.baseVal.x -= GRID_SIZE*PAN_SPEED;
+            tree_app.current_state.zoom_pan_state.pan_x -= GRID_SIZE*PAN_SPEED;
             break;
         case 'KeyH':
             reset_zoom_and_pan(tree_app);
@@ -505,8 +505,8 @@ function set_normal_mode(tree_app: TreeApp): void {
             tree_app.tree_grid.style.cursor = 'grabbing';
             displacement.set_from_vector(mouse_coords.sub(offset));
             offset.set_from_vector(mouse_coords);
-            tree_app.tree_grid.viewBox.baseVal.x -= displacement.x;
-            tree_app.tree_grid.viewBox.baseVal.y -= displacement.y;
+            tree_app.current_state.zoom_pan_state.pan_x -= displacement.x;
+            tree_app.current_state.zoom_pan_state.pan_y -= displacement.y;
         }
     }, 16.67);
 
@@ -557,8 +557,8 @@ function set_normal_mode(tree_app: TreeApp): void {
             tree_app.tree_grid.style.cursor = 'default';
             const epslon = 0.01;
             for (; Math.abs(d.x) > epslon || Math.abs(d.y) > epslon; d = d.scale(D_SCALE_FACTOR)) {
-                tree_app.tree_grid.viewBox.baseVal.x -= d.x;
-                tree_app.tree_grid.viewBox.baseVal.y -= d.y;
+                tree_app.current_state.zoom_pan_state.pan_x -= d.x;
+                tree_app.current_state.zoom_pan_state.pan_y -= d.y;
                 await sleep(15);
             }
         }
@@ -588,7 +588,7 @@ window.addEventListener('mousemove', global_mouse_position);
 function get_coords(tree_app: TreeApp): Vector2 {
     const ctm = tree_app.tree_grid.getScreenCTM();
     if (ctm === null) throw new Error('No possible to get screen CTM.');
-    const padding = new Vector2(tree_app.tree_grid.viewBox.baseVal.x, tree_app.tree_grid.viewBox.baseVal.y);
+    const padding = new Vector2(tree_app.current_state.zoom_pan_state.pan_x, tree_app.current_state.zoom_pan_state.pan_y);
     return mouse_coords.multiply(ctm.inverse()).add(padding);
 }
 
@@ -806,7 +806,6 @@ function set_insert_mode_text(tree_app: TreeApp) {
             window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
         } else {
             //TODO increase dim of Obj if text is large
-            // @ts-ignore
             // console.log(obj.el_text.textContent.length);
         }
     }
@@ -863,15 +862,18 @@ function switch_mode(tree_app: TreeApp, e: KeyboardEvent | null, mode: ModeStrin
     }
 }
 
-
+const center = Vector2.zero();
 function set_initial_mode(tree_app: TreeApp): void {
     const screen_w  = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
     const screen_h = window.innerHeight|| document.documentElement.clientHeight|| document.body.clientHeight;
     const x = Math.floor((BOARD_SIZE_X - screen_w) / 2);
     const y = Math.floor((BOARD_SIZE_Y - screen_h) / 2);
+    center.set_xy(x, y);
     tree_app.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
     tree_app.tree_grid.setAttribute('width', screen_w.toString());
     tree_app.tree_grid.setAttribute('height', screen_h.toString());
+    tree_app.current_state.zoom_pan_state.pan_x = tree_app.tree_grid.viewBox.baseVal.x;
+    tree_app.current_state.zoom_pan_state.pan_y = tree_app.tree_grid.viewBox.baseVal.y;
 
     const grid_pat = document.getElementById('grid-pat');
     if (grid_pat === null) throw new Error('HTML element with ID `grid-pat` not found!');
@@ -899,6 +901,7 @@ function set_initial_mode(tree_app: TreeApp): void {
         const screen_h = window.innerHeight|| document.documentElement.clientHeight|| document.body.clientHeight;
         const x = Math.floor((BOARD_SIZE_X - screen_w) / 2);
         const y = Math.floor((BOARD_SIZE_Y - screen_h) / 2);
+        center.set_xy(x, y);
         tree_app.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
         tree_app.tree_grid.setAttribute('width', `${screen_w}`);
         tree_app.tree_grid.setAttribute('height', `${screen_h}`);
@@ -949,7 +952,6 @@ function set_initial_mode(tree_app: TreeApp): void {
 
     window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
     window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
-
 }
 
 let tree_app: TreeApp;
@@ -961,24 +963,26 @@ function main() {
     if (elements === null) throw new Error('No DOMElement with id `elements` is found');
     const zoom_pan_holder: ZoomPanHolder = {
         zoom_level: 0,
-        pan_x: 0,
-        pan_y: 0,
+        pan_x: Infinity,
+        pan_y: Infinity,
     };
     let zoom_pan_state = new Proxy( zoom_pan_holder, {
         set(target: ZoomPanHolder, property: ZoomPanNames, value: number): boolean {
+            if (value === Infinity) return false;
             target[property] = value;
             if (property == 'pan_x') {
-                tree_grid.viewBox.baseVal.x = value;
+                tree_app.tree_grid.viewBox.baseVal.x = value;
             } else if (property == 'pan_y') {
-                tree_grid.viewBox.baseVal.y = value;
-            } else if (property === 'zoom_level') {
-                const home_icon = document.getElementById('home');
-                if (home_icon === null) throw new Error('Could not found id `home`in document!');
-                if (value) {
-                    home_icon.style.display = 'inline';
-                } else {
-                    home_icon.style.display = 'none';
-                }
+                tree_app.tree_grid.viewBox.baseVal.y = value;
+            } 
+            const home_icon = document.getElementById('home');
+            if (home_icon === null) throw new Error('Could not found id `home`in document!');
+            if (property === 'zoom_level') {
+                if (value) home_icon.style.display = 'inline';
+                else home_icon.style.display = 'none';
+            } else {
+                if (target['pan_x'] !== center.x || target['pan_y'] !== center.y)  home_icon.style.display = 'inline';
+                else home_icon.style.display = 'none';
             }
             return true;
         },
@@ -1017,15 +1021,14 @@ if (document.readyState === "loading") {
 //1) increase dim of Obj if text is large
 //2) Botão e função para deletar objetos e vínculos
 //3) Implementar no modo normal uma maneira de mover vínculos, em cada uma das pontas, seja na saída seja na entrada
-//4) Adicionar um cursor customizado para cada uma das funções do menu
+//4)??? Adicionar um cursor customizado para cada uma das funções do menu
 // https://blog.logrocket.com/creating-custom-mouse-cursor-css/
-//6) UI-icones para zoom in and out e home;
 //7) Implementar um sistema de undo e redo
-//8) Botao Z, go to home, i.é, zoom 1:1 e centro da tela, a posição inicial.
 //9) Keep bond line more close of mouse
 //10) ver se é possível corrigir o erro de o cursor do mouse aparecer embaixo quando clica para editar no modo texto
 //11) Adicionar o esc para cancelar o texto no modo texto
-//12) mouse muito lento quando em excessivo zoom out 
+//12) movimentar o grid com o mouse é muito lento quando em excessivo zoom out 
 //13) zoom in and zoom out com o mouse wheel
-//14) deixar os icones do menu principal em cinza quando não utilizados
 //15) bug no modo de inserir texto, quando um texto está ativo e eu clico em outro obj, eu preciso sair do obj para ativar a inserção.
+//16)Adicionar um indicar de qual o zoom no momento e em qual posição (x=0, y=0, é o centro);
+//17) adicionar um limite para movimentação pan
