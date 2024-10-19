@@ -76,14 +76,56 @@ svg {
   position: fixed;
   left: 10px;
 }
+.menu-icon path {
+  stroke: lightgray;
+}
+.menu-icon:hover path {
+  stroke: black;
+}
+.active path {
+  stroke: black;
+}
 .menu-icon {
   cursor: pointer;
+  fill: black;
 }
-.menu-icon rect:hover {
-  fill: rgba(10, 50, 100, 0.1);
+#zoom-grid {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  background: none;
 }
-.active rect {
-  fill: rgba(10, 50, 100, 0.1);
+#zoom-grid circle {
+  fill: white;
+  filter: drop-shadow(rgba(0, 0, 0, 0.5) 1px 1px 2px);
+}
+#zoom-grid path {
+  fill: gray;
+  transform: translate(3px, 3px);
+}
+.zoom-menu:hover {
+  cursor: pointer;
+}
+#home {
+  display: none;
+}
+#home:hover path {
+  fill: black
+}
+#home:hover circle {
+  fill: rgb(240, 240, 240);
+}
+#zoom-in:hover path {
+  fill: black
+}
+#zoom-in:hover circle {
+  fill: rgb(240, 240, 240);
+}
+#zoom-out:hover path {
+  fill: black
+}
+#zoom-out:hover circle {
+  fill: rgb(240, 240, 240);
 }
 text {
   user-select: none;
