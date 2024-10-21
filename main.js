@@ -83,14 +83,14 @@ class ElBond {
     el_key;
     el;
     constructor(el0, el1, tree_app) {
-        this.el = (document.createElementNS('http://www.w3.org/2000/svg', 'line'));
+        this.el = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         this.move_to(el0, el1);
         this.el.setAttribute('stroke', 'black');
         this.el.setAttribute('stroke-width', '7');
         this.el.setAttribute('marker-start', 'url(#dot)');
         this.el.setAttribute('marker-end', 'url(#triangle)');
         this.el.classList.add('draggable');
-        this.el_key = tree_app.pool.push(this, tree_app.elements);
+        this.el_key = tree_app.pool.push(this, tree_app.svg_groups.elements);
     }
     move_to(el0, el1) {
         if (el1 instanceof ElObj) {
@@ -143,7 +143,7 @@ class ElObj {
         this.el.appendChild(this.el_rect);
         this.el_text_wrapper.appendChild(this.el_text);
         this.el.appendChild(this.el_text_wrapper);
-        this.el_key = tree_app.pool.push(this, tree_app.elements);
+        this.el_key = tree_app.pool.push(this, tree_app.svg_groups.elements);
         this.el_rect.setAttribute('x', '0');
         this.el_rect.setAttribute('y', '0');
         this.el_text_wrapper.setAttribute('x', '0');
@@ -278,11 +278,8 @@ function throttle(func, delay) {
 function clean_events(tree_app) {
     while (tree_app.events.length > 0) {
         const [type, fun] = tree_app.events.pop();
-        tree_app.tree_grid.removeEventListener(type, fun);
+        tree_app.svg_groups.tree_grid.removeEventListener(type, fun);
     }
-}
-function getRandomRange(min, max) {
-    return Math.random() * (max - min) + min;
 }
 function clean_tmps(tree_app) {
     while (tree_app.tmps.length) {
@@ -290,7 +287,7 @@ function clean_tmps(tree_app) {
         switch (type) {
             case TypeTmp.OBJ:
             case TypeTmp.LINE:
-                tree_app.pool.remove(el_key, tree_app.elements);
+                tree_app.pool.remove(el_key, tree_app.svg_groups.elements);
                 break;
             case TypeTmp.TEXT:
                 console.log('a');
@@ -316,6 +313,32 @@ function search_obj(tree_app, target, target_class) {
         target = target.parentElement;
     }
     return obj_tmp;
+}
+function create_delete_icon(tree_app, obj) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('x', '0');
+    svg.setAttribute('y', '-40');
+    svg.setAttribute('width', '36');
+    svg.setAttribute('height', '36');
+    path.style.stroke = 'gray';
+    path.setAttribute('d', 'M18.87 6h1.007l-.988 16.015A1.051 1.051 0 0 1 17.84 23H6.158a1.052 1.052 0 0 1-1.048-.984v-.001L4.123 6h1.003l.982 15.953a.05.05 0 0 0 .05.047h11.683zM9.5 19a.5.5 0 0 0 .5-.5v-10a.5.5 0 0 0-1 0v10a.5.5 0 0 0 .5.5zm5 0a.5.5 0 0 0 .5-.5v-10a.5.5 0 0 0-1 0v10a.5.5 0 0 0 .5.5zM5.064 5H3V4h5v-.75A1.251 1.251 0 0 1 9.25 2h5.5A1.251 1.251 0 0 1 16 3.25V4h5v1H5.064zM9 4h6v-.75a.25.25 0 0 0-.25-.25h-5.5a.25.25 0 0 0-.25.25z');
+    rect.setAttribute('x', '0');
+    rect.setAttribute('y', '0');
+    rect.setAttribute('width', '100%');
+    rect.setAttribute('height', '100%');
+    rect.style.stroke = 'none';
+    rect.style.fill = 'rgba(0, 0, 0, 0)';
+    svg.appendChild(path);
+    svg.appendChild(rect);
+    svg.addEventListener('click', (e) => {
+        console.log(e.button);
+        tree_app.pool.remove(obj.el_key, tree_app.svg_groups.elements);
+        tree_app.current_state.active_obj = null;
+    });
+    obj.el.appendChild(svg);
 }
 let modes;
 let normal_mode;
@@ -363,18 +386,18 @@ function reset_zoom_and_pan(tree_app) {
     const screen_h = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
     const x = Math.floor((BOARD_SIZE_X - screen_w) / 2);
     const y = Math.floor((BOARD_SIZE_Y - screen_h) / 2);
-    tree_app.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
-    tree_app.tree_grid.setAttribute('width', screen_w.toString());
-    tree_app.tree_grid.setAttribute('height', screen_h.toString());
+    tree_app.svg_groups.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
+    tree_app.svg_groups.tree_grid.setAttribute('width', screen_w.toString());
+    tree_app.svg_groups.tree_grid.setAttribute('height', screen_h.toString());
     tree_app.current_state.zoom_pan_state.zoom_level = 0;
 }
 function zoom_in(tree_app) {
     if (tree_app.current_state.zoom_pan_state.zoom_level < tree_app.limits.max_zoom_in) {
         tree_app.current_state.zoom_pan_state.zoom_level += 1;
-        const w = tree_app.tree_grid.viewBox.baseVal.width;
-        const h = tree_app.tree_grid.viewBox.baseVal.height;
-        tree_app.tree_grid.viewBox.baseVal.width /= SCALE_FACTOR;
-        tree_app.tree_grid.viewBox.baseVal.height /= SCALE_FACTOR;
+        const w = tree_app.svg_groups.tree_grid.viewBox.baseVal.width;
+        const h = tree_app.svg_groups.tree_grid.viewBox.baseVal.height;
+        tree_app.svg_groups.tree_grid.viewBox.baseVal.width /= SCALE_FACTOR;
+        tree_app.svg_groups.tree_grid.viewBox.baseVal.height /= SCALE_FACTOR;
         tree_app.current_state.zoom_pan_state.pan_x += w / (SCALE_FACTOR * 4);
         tree_app.current_state.zoom_pan_state.pan_y += h / (SCALE_FACTOR * 4);
     }
@@ -382,10 +405,10 @@ function zoom_in(tree_app) {
 function zoom_out(tree_app) {
     if (tree_app.current_state.zoom_pan_state.zoom_level > tree_app.limits.max_zoom_out) {
         tree_app.current_state.zoom_pan_state.zoom_level -= 1;
-        const w = tree_app.tree_grid.viewBox.baseVal.width;
-        const h = tree_app.tree_grid.viewBox.baseVal.height;
-        tree_app.tree_grid.viewBox.baseVal.width *= SCALE_FACTOR;
-        tree_app.tree_grid.viewBox.baseVal.height *= SCALE_FACTOR;
+        const w = tree_app.svg_groups.tree_grid.viewBox.baseVal.width;
+        const h = tree_app.svg_groups.tree_grid.viewBox.baseVal.height;
+        tree_app.svg_groups.tree_grid.viewBox.baseVal.width *= SCALE_FACTOR;
+        tree_app.svg_groups.tree_grid.viewBox.baseVal.height *= SCALE_FACTOR;
         tree_app.current_state.zoom_pan_state.pan_x += w * (1 - SCALE_FACTOR) / 2;
         tree_app.current_state.zoom_pan_state.pan_y += h * (1 - SCALE_FACTOR) / 2;
     }
@@ -444,7 +467,7 @@ function set_normal_mode(tree_app) {
             }
         }
         else if (el_dragged instanceof SVGSVGElement) {
-            tree_app.tree_grid.style.cursor = 'grabbing';
+            tree_app.svg_groups.tree_grid.style.cursor = 'grabbing';
             displacement.set_from_vector(mouse_coords.sub(offset));
             offset.set_from_vector(mouse_coords);
             tree_app.current_state.zoom_pan_state.pan_x -= displacement.x;
@@ -469,7 +492,7 @@ function set_normal_mode(tree_app) {
     const handle_mouse_down = (e) => {
         const target = e.target;
         if (target !== null && target.id === 'grid') {
-            el_dragged = tree_app.tree_grid;
+            el_dragged = tree_app.svg_groups.tree_grid;
             is_dragging = true;
             offset.set_from_vector(mouse_coords);
         }
@@ -480,6 +503,14 @@ function set_normal_mode(tree_app) {
                 el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
                 is_dragging = true;
                 offset.set_from_vector(get_coords(tree_app).sub(el_dragged.coords));
+                if (tree_app.current_state.active_obj !== obj_tmp.el_key) {
+                    if (tree_app.current_state.active_obj !== null) {
+                        const active_obj = tree_app.pool.get(tree_app.current_state.active_obj);
+                        active_obj.el.removeChild(active_obj.el.getElementsByTagName('svg')[0]);
+                    }
+                    tree_app.current_state.active_obj = obj_tmp.el_key;
+                    create_delete_icon(tree_app, obj_tmp);
+                }
             }
         }
     };
@@ -495,7 +526,7 @@ function set_normal_mode(tree_app) {
         let d = new Vector2(displacement.x, displacement.y).scale(D_SCALE_FACTOR);
         displacement.set_xy(0, 0);
         if (is_svg) {
-            tree_app.tree_grid.style.cursor = 'default';
+            tree_app.svg_groups.tree_grid.style.cursor = 'default';
             const epslon = 0.01;
             for (; Math.abs(d.x) > epslon || Math.abs(d.y) > epslon; d = d.scale(D_SCALE_FACTOR)) {
                 tree_app.current_state.zoom_pan_state.pan_x -= d.x;
@@ -504,12 +535,12 @@ function set_normal_mode(tree_app) {
             }
         }
     };
-    tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
-    tree_app.tree_grid.addEventListener('mouseout', handle_mouse_out);
-    tree_app.tree_grid.addEventListener('mousedown', handle_mouse_down);
-    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
-    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move_grid);
-    tree_app.tree_grid.addEventListener('mouseup', handle_mouse_up);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseover', handle_mouse_over);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseout', handle_mouse_out);
+    tree_app.svg_groups.tree_grid.addEventListener('mousedown', handle_mouse_down);
+    tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move);
+    tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move_grid);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseup', handle_mouse_up);
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['mouseout', handle_mouse_out]);
     tree_app.events.push(['mousedown', handle_mouse_down]);
@@ -523,7 +554,7 @@ const global_mouse_position = (e) => {
 };
 window.addEventListener('mousemove', global_mouse_position);
 function get_coords(tree_app) {
-    const ctm = tree_app.tree_grid.getScreenCTM();
+    const ctm = tree_app.svg_groups.tree_grid.getScreenCTM();
     if (ctm === null)
         throw new Error('No possible to get screen CTM.');
     const padding = new Vector2(tree_app.current_state.zoom_pan_state.pan_x, tree_app.current_state.zoom_pan_state.pan_y);
@@ -551,7 +582,7 @@ function set_insert_mode_bond(tree_app) {
                     starter_obj = null;
                 }
                 if (line !== null) {
-                    tree_app.pool.remove(line.el_key, tree_app.elements);
+                    tree_app.pool.remove(line.el_key, tree_app.svg_groups.elements);
                     tree_app.tmps.pop();
                     line = null;
                 }
@@ -597,10 +628,10 @@ function set_insert_mode_bond(tree_app) {
             obj.el.setAttribute('fill', OBJ_COLOR);
         }
     };
-    tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
-    tree_app.tree_grid.addEventListener('mouseout', handle_mouse_out);
-    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
-    tree_app.tree_grid.addEventListener('mousedown', handle_mouse_down);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseover', handle_mouse_over);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseout', handle_mouse_out);
+    tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move);
+    tree_app.svg_groups.tree_grid.addEventListener('mousedown', handle_mouse_down);
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['mouseout', handle_mouse_out]);
     tree_app.events.push(['mousemove', handle_mouse_move]);
@@ -621,15 +652,15 @@ function set_insert_mode_obj(tree_app, e) {
             const coords = get_coords(tree_app).sub(OBJ_DIM.div(2));
             obj = new ElObj(coords, OBJ_DIM, tree_app);
             tree_app.tmps.push([TypeTmp.OBJ, obj.el_key]);
-            tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
-            tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
+            tree_app.svg_groups.tree_grid.removeEventListener('mouseover', handle_mouse_over);
+            tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move);
         }
     };
     const handle_mouse_click = (e) => {
         if (obj === null || !is_putting)
             return;
-        tree_app.tree_grid.removeEventListener('mousemove', handle_mouse_move);
-        tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
+        tree_app.svg_groups.tree_grid.removeEventListener('mousemove', handle_mouse_move);
+        tree_app.svg_groups.tree_grid.addEventListener('mouseover', handle_mouse_over);
         tree_app.tmps.pop();
         obj.el.setAttribute('fill', OBJ_COLOR);
         obj.el_text.setAttribute('fill', 'gray');
@@ -637,8 +668,8 @@ function set_insert_mode_obj(tree_app, e) {
         is_putting = false;
         starter_obj = null;
     };
-    tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
-    tree_app.tree_grid.addEventListener('click', handle_mouse_click);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseover', handle_mouse_over);
+    tree_app.svg_groups.tree_grid.addEventListener('click', handle_mouse_click);
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['click', handle_mouse_click]);
     tree_app.events.push(['mousemove', handle_mouse_move]);
@@ -646,8 +677,8 @@ function set_insert_mode_obj(tree_app, e) {
         const coords = get_coords(tree_app).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE);
         obj = new ElObj(coords, OBJ_DIM, tree_app);
         tree_app.tmps.push([TypeTmp.OBJ, obj.el_key]);
-        tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
-        tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
+        tree_app.svg_groups.tree_grid.removeEventListener('mouseover', handle_mouse_over);
+        tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move);
     }
 }
 function set_insert_mode_text(tree_app) {
@@ -731,9 +762,9 @@ function set_insert_mode_text(tree_app) {
         else {
         }
     };
-    tree_app.tree_grid.addEventListener('keyup', handle_key_up);
-    tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
-    tree_app.tree_grid.addEventListener('mousedown', handle_mouse_down);
+    tree_app.svg_groups.tree_grid.addEventListener('keyup', handle_key_up);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseover', handle_mouse_over);
+    tree_app.svg_groups.tree_grid.addEventListener('mousedown', handle_mouse_down);
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['mousedown', handle_mouse_down]);
     tree_app.events.push(['keyup', handle_key_up]);
@@ -787,11 +818,11 @@ function set_initial_mode(tree_app) {
     const x = Math.floor((BOARD_SIZE_X - screen_w) / 2);
     const y = Math.floor((BOARD_SIZE_Y - screen_h) / 2);
     center.set_xy(x, y);
-    tree_app.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
-    tree_app.tree_grid.setAttribute('width', screen_w.toString());
-    tree_app.tree_grid.setAttribute('height', screen_h.toString());
-    tree_app.current_state.zoom_pan_state.pan_x = tree_app.tree_grid.viewBox.baseVal.x;
-    tree_app.current_state.zoom_pan_state.pan_y = tree_app.tree_grid.viewBox.baseVal.y;
+    tree_app.svg_groups.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
+    tree_app.svg_groups.tree_grid.setAttribute('width', screen_w.toString());
+    tree_app.svg_groups.tree_grid.setAttribute('height', screen_h.toString());
+    tree_app.current_state.zoom_pan_state.pan_x = tree_app.svg_groups.tree_grid.viewBox.baseVal.x;
+    tree_app.current_state.zoom_pan_state.pan_y = tree_app.svg_groups.tree_grid.viewBox.baseVal.y;
     const grid_pat = document.getElementById('grid-pat');
     if (grid_pat === null)
         throw new Error('HTML element with ID `grid-pat` not found!');
@@ -819,9 +850,9 @@ function set_initial_mode(tree_app) {
             const x = Math.floor((BOARD_SIZE_X - screen_w) / 2);
             const y = Math.floor((BOARD_SIZE_Y - screen_h) / 2);
             center.set_xy(x, y);
-            tree_app.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
-            tree_app.tree_grid.setAttribute('width', `${screen_w}`);
-            tree_app.tree_grid.setAttribute('height', `${screen_h}`);
+            tree_app.svg_groups.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
+            tree_app.svg_groups.tree_grid.setAttribute('width', `${screen_w}`);
+            tree_app.svg_groups.tree_grid.setAttribute('height', `${screen_h}`);
             menu_grid.style.top = ((screen_h - Number(menu_grid.getAttribute('height'))) / 2).toString();
         }
     });
@@ -872,30 +903,17 @@ function set_initial_mode(tree_app) {
     window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
     window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
 }
-let tree_app;
-function main() {
-    console.info("DOM loaded");
-    const tree_grid = document.getElementById('tree_grid');
-    if (tree_grid === null)
-        throw new Error('No DOMElement with id `tree_grid` is found');
-    const elements = document.getElementById('elements');
-    if (elements === null)
-        throw new Error('No DOMElement with id `elements` is found');
-    const zoom_pan_holder = {
-        zoom_level: 0,
-        pan_x: Infinity,
-        pan_y: Infinity,
-    };
-    let zoom_pan_state = new Proxy(zoom_pan_holder, {
+function proxy_zoom_pan_constructor(zoom_pan_holder) {
+    return new Proxy(zoom_pan_holder, {
         set(target, property, value) {
             if (value === Infinity)
                 return false;
             target[property] = value;
             if (property == 'pan_x') {
-                tree_app.tree_grid.viewBox.baseVal.x = value;
+                tree_app.svg_groups.tree_grid.viewBox.baseVal.x = value;
             }
             else if (property == 'pan_y') {
-                tree_app.tree_grid.viewBox.baseVal.y = value;
+                tree_app.svg_groups.tree_grid.viewBox.baseVal.y = value;
             }
             const home_icon = document.getElementById('home');
             if (home_icon === null)
@@ -915,9 +933,31 @@ function main() {
             return true;
         },
     });
+}
+let tree_app;
+function main() {
+    console.info("DOM loaded");
+    const tree_grid = document.getElementById('tree_grid');
+    if (tree_grid === null)
+        throw new Error('No DOMElement with id `tree_grid` is found');
+    const elements = document.getElementById('elements');
+    if (elements === null)
+        throw new Error('No DOMElement with id `elements` is found');
+    const tmps = document.getElementById('tmps');
+    if (tmps === null)
+        throw new Error('No DOMElement with id `tmps` is found');
+    const zoom_pan_holder = {
+        zoom_level: 0,
+        pan_x: Infinity,
+        pan_y: Infinity,
+    };
+    let zoom_pan_state = proxy_zoom_pan_constructor(zoom_pan_holder);
     tree_app = {
-        tree_grid,
-        elements,
+        svg_groups: {
+            tree_grid,
+            elements,
+            tmps,
+        },
         pool: new Pool(),
         current_mode: "UNDEFINIED",
         current_type_el: "UNDEFINIED",
@@ -929,7 +969,7 @@ function main() {
         tmps: [],
         limits: {
             max_zoom_out: -4,
-            max_zoom_in: 4,
+            max_zoom_in: 3,
         }
     };
     switch_mode(tree_app, null, "INITIAL_MODE");

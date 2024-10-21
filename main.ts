@@ -53,9 +53,14 @@ type CurrentState = {
     zoom_pan_state: ZoomPanHolder,
 }
 
-type TreeApp = {
+type SVGGroups = {
     tree_grid: SVGSVGElement,
     elements: SVGGElement,
+    tmps: SVGGElement,
+}
+
+type TreeApp = {
+    svg_groups: SVGGroups,
     pool: Pool,
     current_mode: ModeStrings,
     current_type_el: TypeElStrings | undefined;
@@ -123,14 +128,14 @@ class ElBond {
     el_key: ElKey;
     el: SVGLineElement;
     constructor(el0: ElObj, el1: ElObj | Vector2, tree_app: TreeApp) {
-        this.el = (document.createElementNS('http://www.w3.org/2000/svg', 'line'));
+        this.el = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         this.move_to(el0, el1);
         this.el.setAttribute('stroke', 'black');
         this.el.setAttribute('stroke-width', '7');
         this.el.setAttribute('marker-start', 'url(#dot)');
         this.el.setAttribute('marker-end', 'url(#triangle)');
         this.el.classList.add('draggable');
-        this.el_key = tree_app.pool.push(this, tree_app.elements);
+        this.el_key = tree_app.pool.push(this, tree_app.svg_groups.elements);
     }
     public move_to(el0: ElObj, el1: ElObj | Vector2): void {
         if (el1 instanceof ElObj) {
@@ -182,7 +187,7 @@ class ElObj {
         this.el.appendChild(this.el_rect);
         this.el_text_wrapper.appendChild(this.el_text);
         this.el.appendChild(this.el_text_wrapper);
-        this.el_key = tree_app.pool.push(this, tree_app.elements);
+        this.el_key = tree_app.pool.push(this, tree_app.svg_groups.elements);
 
         this.el_rect.setAttribute('x', '0');
         this.el_rect.setAttribute('y', '0');
@@ -333,12 +338,8 @@ function throttle(func: Function, delay: number) {
 function clean_events(tree_app: TreeApp): void {
     while (tree_app.events.length > 0) {
         const [type, fun] = <[string, any]> tree_app.events.pop();
-        tree_app.tree_grid.removeEventListener(type, fun);
+        tree_app.svg_groups.tree_grid.removeEventListener(type, fun);
     }
-}
-
-function getRandomRange(min: number, max: number): number {
-    return Math.random() * (max - min) + min;
 }
 
 function clean_tmps(tree_app: TreeApp): void {
@@ -347,7 +348,7 @@ function clean_tmps(tree_app: TreeApp): void {
         switch (type) {
             case TypeTmp.OBJ:
             case TypeTmp.LINE:
-                tree_app.pool.remove(el_key, tree_app.elements);
+                tree_app.pool.remove(el_key, tree_app.svg_groups.elements);
                 break
             case TypeTmp.TEXT:
                 console.log('a');
@@ -375,6 +376,33 @@ function search_obj(tree_app: TreeApp, target: HTMLElement | null, target_class:
         target = target.parentElement;
     }
     return obj_tmp;
+}
+
+function create_delete_icon(tree_app: TreeApp, obj: ElObj): void {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('x', '0');
+        svg.setAttribute('y', '-40');
+        svg.setAttribute('width', '36');
+        svg.setAttribute('height', '36');
+        path.style.stroke = 'gray';
+        path.setAttribute('d', 'M18.87 6h1.007l-.988 16.015A1.051 1.051 0 0 1 17.84 23H6.158a1.052 1.052 0 0 1-1.048-.984v-.001L4.123 6h1.003l.982 15.953a.05.05 0 0 0 .05.047h11.683zM9.5 19a.5.5 0 0 0 .5-.5v-10a.5.5 0 0 0-1 0v10a.5.5 0 0 0 .5.5zm5 0a.5.5 0 0 0 .5-.5v-10a.5.5 0 0 0-1 0v10a.5.5 0 0 0 .5.5zM5.064 5H3V4h5v-.75A1.251 1.251 0 0 1 9.25 2h5.5A1.251 1.251 0 0 1 16 3.25V4h5v1H5.064zM9 4h6v-.75a.25.25 0 0 0-.25-.25h-5.5a.25.25 0 0 0-.25.25z');
+        rect.setAttribute('x', '0');
+        rect.setAttribute('y', '0');
+        rect.setAttribute('width', '100%');
+        rect.setAttribute('height', '100%');
+        rect.style.stroke = 'none';
+        rect.style.fill = 'rgba(0, 0, 0, 0)';
+        svg.appendChild(path);
+        svg.appendChild(rect);
+        svg.addEventListener('click', (e: MouseEvent) => {
+            console.log(e.button);
+            tree_app.pool.remove(obj.el_key, tree_app.svg_groups.elements);
+            tree_app.current_state.active_obj = null;
+        });
+        obj.el.appendChild(svg);
 }
 
 let modes: [HTMLElement, ModeStrings, TypeElStrings][];
@@ -418,19 +446,19 @@ function reset_zoom_and_pan(tree_app: TreeApp): void {
     const screen_h = window.innerHeight|| document.documentElement.clientHeight|| document.body.clientHeight;
     const x = Math.floor((BOARD_SIZE_X - screen_w) / 2);
     const y = Math.floor((BOARD_SIZE_Y - screen_h) / 2);
-    tree_app.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
-    tree_app.tree_grid.setAttribute('width', screen_w.toString());
-    tree_app.tree_grid.setAttribute('height', screen_h.toString());
+    tree_app.svg_groups.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
+    tree_app.svg_groups.tree_grid.setAttribute('width', screen_w.toString());
+    tree_app.svg_groups.tree_grid.setAttribute('height', screen_h.toString());
     tree_app.current_state.zoom_pan_state.zoom_level = 0;
 }
 
 function zoom_in(tree_app: TreeApp): void {
     if (tree_app.current_state.zoom_pan_state.zoom_level < tree_app.limits.max_zoom_in) {
         tree_app.current_state.zoom_pan_state.zoom_level += 1;
-        const w = tree_app.tree_grid.viewBox.baseVal.width;
-        const h = tree_app.tree_grid.viewBox.baseVal.height;
-        tree_app.tree_grid.viewBox.baseVal.width /= SCALE_FACTOR;
-        tree_app.tree_grid.viewBox.baseVal.height /= SCALE_FACTOR;
+        const w = tree_app.svg_groups.tree_grid.viewBox.baseVal.width;
+        const h = tree_app.svg_groups.tree_grid.viewBox.baseVal.height;
+        tree_app.svg_groups.tree_grid.viewBox.baseVal.width /= SCALE_FACTOR;
+        tree_app.svg_groups.tree_grid.viewBox.baseVal.height /= SCALE_FACTOR;
         tree_app.current_state.zoom_pan_state.pan_x += w/(SCALE_FACTOR*4);
         tree_app.current_state.zoom_pan_state.pan_y += h/(SCALE_FACTOR*4);
     }
@@ -439,10 +467,10 @@ function zoom_in(tree_app: TreeApp): void {
 function zoom_out(tree_app: TreeApp): void {
     if (tree_app.current_state.zoom_pan_state.zoom_level > tree_app.limits.max_zoom_out) {
         tree_app.current_state.zoom_pan_state.zoom_level -= 1;
-        const w = tree_app.tree_grid.viewBox.baseVal.width;
-        const h = tree_app.tree_grid.viewBox.baseVal.height;
-        tree_app.tree_grid.viewBox.baseVal.width *= SCALE_FACTOR;
-        tree_app.tree_grid.viewBox.baseVal.height *= SCALE_FACTOR;
+        const w = tree_app.svg_groups.tree_grid.viewBox.baseVal.width;
+        const h = tree_app.svg_groups.tree_grid.viewBox.baseVal.height;
+        tree_app.svg_groups.tree_grid.viewBox.baseVal.width *= SCALE_FACTOR;
+        tree_app.svg_groups.tree_grid.viewBox.baseVal.height *= SCALE_FACTOR;
         tree_app.current_state.zoom_pan_state.pan_x += w*(1-SCALE_FACTOR)/2;
         tree_app.current_state.zoom_pan_state.pan_y += h*(1-SCALE_FACTOR)/2;
     }
@@ -502,7 +530,7 @@ function set_normal_mode(tree_app: TreeApp): void {
                 }
             }
         } else if (el_dragged instanceof SVGSVGElement) {
-            tree_app.tree_grid.style.cursor = 'grabbing';
+            tree_app.svg_groups.tree_grid.style.cursor = 'grabbing';
             displacement.set_from_vector(mouse_coords.sub(offset));
             offset.set_from_vector(mouse_coords);
             tree_app.current_state.zoom_pan_state.pan_x -= displacement.x;
@@ -528,7 +556,7 @@ function set_normal_mode(tree_app: TreeApp): void {
     const handle_mouse_down = (e: MouseEvent) => {
         const target = e.target as HTMLElement;
         if (target !== null && target.id === 'grid') {
-            el_dragged = tree_app.tree_grid;
+            el_dragged = tree_app.svg_groups.tree_grid;
             is_dragging = true;
             offset.set_from_vector(mouse_coords);
         } else {
@@ -538,6 +566,14 @@ function set_normal_mode(tree_app: TreeApp): void {
                 el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
                 is_dragging = true;
                 offset.set_from_vector(get_coords(tree_app).sub(el_dragged.coords));
+                if (tree_app.current_state.active_obj !== obj_tmp.el_key) {
+                    if (tree_app.current_state.active_obj !== null) {
+                        const active_obj = tree_app.pool.get(tree_app.current_state.active_obj);
+                        active_obj.el.removeChild(active_obj.el.getElementsByTagName('svg')[0]);
+                    }
+                    tree_app.current_state.active_obj = obj_tmp.el_key;
+                    create_delete_icon(tree_app, obj_tmp);
+                }
             }
         }
     };
@@ -554,7 +590,7 @@ function set_normal_mode(tree_app: TreeApp): void {
         let d = new Vector2(displacement.x, displacement.y).scale(D_SCALE_FACTOR);
         displacement.set_xy(0, 0)
         if (is_svg) {
-            tree_app.tree_grid.style.cursor = 'default';
+            tree_app.svg_groups.tree_grid.style.cursor = 'default';
             const epslon = 0.01;
             for (; Math.abs(d.x) > epslon || Math.abs(d.y) > epslon; d = d.scale(D_SCALE_FACTOR)) {
                 tree_app.current_state.zoom_pan_state.pan_x -= d.x;
@@ -564,12 +600,12 @@ function set_normal_mode(tree_app: TreeApp): void {
         }
     };
 
-    tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
-    tree_app.tree_grid.addEventListener('mouseout',  handle_mouse_out);
-    tree_app.tree_grid.addEventListener('mousedown', handle_mouse_down);
-    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
-    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move_grid);
-    tree_app.tree_grid.addEventListener('mouseup',   handle_mouse_up);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseover', handle_mouse_over);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseout',  handle_mouse_out);
+    tree_app.svg_groups.tree_grid.addEventListener('mousedown', handle_mouse_down);
+    tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move);
+    tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move_grid);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseup',   handle_mouse_up);
 
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['mouseout',  handle_mouse_out]);
@@ -586,7 +622,7 @@ const global_mouse_position = (e: MouseEvent) => {
 window.addEventListener('mousemove', global_mouse_position);
 
 function get_coords(tree_app: TreeApp): Vector2 {
-    const ctm = tree_app.tree_grid.getScreenCTM();
+    const ctm = tree_app.svg_groups.tree_grid.getScreenCTM();
     if (ctm === null) throw new Error('No possible to get screen CTM.');
     const padding = new Vector2(tree_app.current_state.zoom_pan_state.pan_x, tree_app.current_state.zoom_pan_state.pan_y);
     return mouse_coords.multiply(ctm.inverse()).add(padding);
@@ -616,7 +652,7 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
                     starter_obj = null;
                 }
                 if (line !== null) {
-                    tree_app.pool.remove(line.el_key, tree_app.elements);
+                    tree_app.pool.remove(line.el_key, tree_app.svg_groups.elements);
                     tree_app.tmps.pop();
                     line = null;
                 }
@@ -664,10 +700,10 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
         }
     };
 
-    tree_app.tree_grid.addEventListener('mouseover', handle_mouse_over);
-    tree_app.tree_grid.addEventListener('mouseout',  handle_mouse_out);
-    tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
-    tree_app.tree_grid.addEventListener('mousedown', handle_mouse_down);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseover', handle_mouse_over);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseout',  handle_mouse_out);
+    tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move);
+    tree_app.svg_groups.tree_grid.addEventListener('mousedown', handle_mouse_down);
 
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['mouseout',  handle_mouse_out]);
@@ -692,15 +728,15 @@ function set_insert_mode_obj(tree_app: TreeApp, e: KeyboardEvent | null) {
             const coords = get_coords(tree_app).sub(OBJ_DIM.div(2));
             obj = new ElObj(coords, OBJ_DIM, tree_app);
             tree_app.tmps.push([TypeTmp.OBJ, obj.el_key]);
-            tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
-            tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
+            tree_app.svg_groups.tree_grid.removeEventListener('mouseover', handle_mouse_over);
+            tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move);
         }
     };
 
     const handle_mouse_click = (e: MouseEvent) => {
         if (obj === null || !is_putting) return;
-        tree_app.tree_grid.removeEventListener('mousemove', handle_mouse_move);
-        tree_app.tree_grid.addEventListener('mouseover',  handle_mouse_over);
+        tree_app.svg_groups.tree_grid.removeEventListener('mousemove', handle_mouse_move);
+        tree_app.svg_groups.tree_grid.addEventListener('mouseover',  handle_mouse_over);
         tree_app.tmps.pop();
         obj.el.setAttribute('fill', OBJ_COLOR);
         obj.el_text.setAttribute('fill', 'gray');
@@ -709,8 +745,8 @@ function set_insert_mode_obj(tree_app: TreeApp, e: KeyboardEvent | null) {
         starter_obj = null;
     };
 
-    tree_app.tree_grid.addEventListener('mouseover',  handle_mouse_over);
-    tree_app.tree_grid.addEventListener('click',  handle_mouse_click);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseover',  handle_mouse_over);
+    tree_app.svg_groups.tree_grid.addEventListener('click',  handle_mouse_click);
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['click', handle_mouse_click]);
     tree_app.events.push(['mousemove', handle_mouse_move]);
@@ -720,8 +756,8 @@ function set_insert_mode_obj(tree_app: TreeApp, e: KeyboardEvent | null) {
         obj = new ElObj(coords, OBJ_DIM, tree_app);
         tree_app.tmps.push([TypeTmp.OBJ, obj.el_key]);
         // obj.move_to(coords);
-        tree_app.tree_grid.removeEventListener('mouseover', handle_mouse_over);
-        tree_app.tree_grid.addEventListener('mousemove', handle_mouse_move);
+        tree_app.svg_groups.tree_grid.removeEventListener('mouseover', handle_mouse_over);
+        tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move);
     }
 }
 
@@ -809,9 +845,9 @@ function set_insert_mode_text(tree_app: TreeApp) {
             // console.log(obj.el_text.textContent.length);
         }
     }
-    tree_app.tree_grid.addEventListener('keyup', handle_key_up);
-    tree_app.tree_grid.addEventListener('mouseover',  handle_mouse_over);
-    tree_app.tree_grid.addEventListener('mousedown',  handle_mouse_down);
+    tree_app.svg_groups.tree_grid.addEventListener('keyup', handle_key_up);
+    tree_app.svg_groups.tree_grid.addEventListener('mouseover',  handle_mouse_over);
+    tree_app.svg_groups.tree_grid.addEventListener('mousedown',  handle_mouse_down);
 
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['mousedown', handle_mouse_down]);
@@ -869,11 +905,11 @@ function set_initial_mode(tree_app: TreeApp): void {
     const x = Math.floor((BOARD_SIZE_X - screen_w) / 2);
     const y = Math.floor((BOARD_SIZE_Y - screen_h) / 2);
     center.set_xy(x, y);
-    tree_app.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
-    tree_app.tree_grid.setAttribute('width', screen_w.toString());
-    tree_app.tree_grid.setAttribute('height', screen_h.toString());
-    tree_app.current_state.zoom_pan_state.pan_x = tree_app.tree_grid.viewBox.baseVal.x;
-    tree_app.current_state.zoom_pan_state.pan_y = tree_app.tree_grid.viewBox.baseVal.y;
+    tree_app.svg_groups.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
+    tree_app.svg_groups.tree_grid.setAttribute('width', screen_w.toString());
+    tree_app.svg_groups.tree_grid.setAttribute('height', screen_h.toString());
+    tree_app.current_state.zoom_pan_state.pan_x = tree_app.svg_groups.tree_grid.viewBox.baseVal.x;
+    tree_app.current_state.zoom_pan_state.pan_y = tree_app.svg_groups.tree_grid.viewBox.baseVal.y;
 
     const grid_pat = document.getElementById('grid-pat');
     if (grid_pat === null) throw new Error('HTML element with ID `grid-pat` not found!');
@@ -902,9 +938,9 @@ function set_initial_mode(tree_app: TreeApp): void {
         const x = Math.floor((BOARD_SIZE_X - screen_w) / 2);
         const y = Math.floor((BOARD_SIZE_Y - screen_h) / 2);
         center.set_xy(x, y);
-        tree_app.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
-        tree_app.tree_grid.setAttribute('width', `${screen_w}`);
-        tree_app.tree_grid.setAttribute('height', `${screen_h}`);
+        tree_app.svg_groups.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
+        tree_app.svg_groups.tree_grid.setAttribute('width', `${screen_w}`);
+        tree_app.svg_groups.tree_grid.setAttribute('height', `${screen_h}`);
         menu_grid.style.top = ((screen_h-Number(menu_grid.getAttribute('height')))/2).toString();
     }});
 
@@ -954,26 +990,15 @@ function set_initial_mode(tree_app: TreeApp): void {
     window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
 }
 
-let tree_app: TreeApp;
-function main() {
-    console.info("DOM loaded");
-    const tree_grid = document.getElementById('tree_grid') as SVGSVGElement | null;
-    if (tree_grid === null) throw new Error('No DOMElement with id `tree_grid` is found');
-    const elements = document.getElementById('elements') as SVGGElement | null;
-    if (elements === null) throw new Error('No DOMElement with id `elements` is found');
-    const zoom_pan_holder: ZoomPanHolder = {
-        zoom_level: 0,
-        pan_x: Infinity,
-        pan_y: Infinity,
-    };
-    let zoom_pan_state = new Proxy( zoom_pan_holder, {
+function proxy_zoom_pan_constructor(zoom_pan_holder: ZoomPanHolder): ZoomPanHolder {
+    return new Proxy( zoom_pan_holder, {
         set(target: ZoomPanHolder, property: ZoomPanNames, value: number): boolean {
             if (value === Infinity) return false;
             target[property] = value;
             if (property == 'pan_x') {
-                tree_app.tree_grid.viewBox.baseVal.x = value;
+                tree_app.svg_groups.tree_grid.viewBox.baseVal.x = value;
             } else if (property == 'pan_y') {
-                tree_app.tree_grid.viewBox.baseVal.y = value;
+                tree_app.svg_groups.tree_grid.viewBox.baseVal.y = value;
             } 
             const home_icon = document.getElementById('home');
             if (home_icon === null) throw new Error('Could not found id `home`in document!');
@@ -987,10 +1012,31 @@ function main() {
             return true;
         },
     });
+}
+
+let tree_app: TreeApp;
+function main() {
+    console.info("DOM loaded");
+    const tree_grid = document.getElementById('tree_grid') as SVGSVGElement | null;
+    if (tree_grid === null) throw new Error('No DOMElement with id `tree_grid` is found');
+    const elements = document.getElementById('elements') as SVGGElement | null;
+    if (elements === null) throw new Error('No DOMElement with id `elements` is found');
+    const tmps = document.getElementById('tmps') as SVGGElement | null;
+    if (tmps === null) throw new Error('No DOMElement with id `tmps` is found');
+
+    const zoom_pan_holder: ZoomPanHolder = {
+        zoom_level: 0,
+        pan_x: Infinity,
+        pan_y: Infinity,
+    };
+    let zoom_pan_state = proxy_zoom_pan_constructor(zoom_pan_holder);
 
     tree_app = {
-        tree_grid,
-        elements,
+        svg_groups: {
+            tree_grid,
+            elements,
+            tmps,
+        },
         pool: new Pool(),
         current_mode: "UNDEFINIED",
         current_type_el: "UNDEFINIED",
@@ -1002,7 +1048,7 @@ function main() {
         tmps: [],
         limits: {
             max_zoom_out: -4,
-            max_zoom_in:   4,
+            max_zoom_in:   3,
         }
     };
 
@@ -1032,3 +1078,4 @@ if (document.readyState === "loading") {
 //15) bug no modo de inserir texto, quando um texto está ativo e eu clico em outro obj, eu preciso sair do obj para ativar a inserção.
 //16)Adicionar um indicar de qual o zoom no momento e em qual posição (x=0, y=0, é o centro);
 //17) adicionar um limite para movimentação pan
+//18) apenas o botão do mouse esquerdo, no momento o botão direito também movimenta e faz as ações
