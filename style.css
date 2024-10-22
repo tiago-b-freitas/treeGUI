@@ -130,3 +130,9 @@ svg {
 text {
   user-select: none;
 }
+.delete path {
+  stroke: rgb(170, 170, 200);
+}
+.delete:hover path {
+  stroke: rgb(80, 80, 110);
+}

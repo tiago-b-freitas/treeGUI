@@ -290,13 +290,17 @@ function clean_tmps(tree_app) {
                 tree_app.pool.remove(el_key, tree_app.svg_groups.elements);
                 break;
             case TypeTmp.TEXT:
-                console.log('a');
                 const obj = tree_app.pool.get(el_key);
                 obj.el.setAttribute('fill', OBJ_COLOR);
                 obj.el_text.style.border = '';
                 obj.el_text.contentEditable = 'false';
                 break;
         }
+    }
+    if (tree_app.current_state.active_obj !== null) {
+        const obj = tree_app.pool.get(tree_app.current_state.active_obj);
+        obj.el.removeChild(obj.el.getElementsByClassName('delete')[0]);
+        tree_app.current_state.active_obj = null;
     }
 }
 function cleaner(tree_app) {
@@ -321,9 +325,9 @@ function create_delete_icon(tree_app, obj) {
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('x', '0');
     svg.setAttribute('y', '-40');
-    svg.setAttribute('width', '36');
-    svg.setAttribute('height', '36');
-    path.style.stroke = 'gray';
+    svg.setAttribute('width', '30');
+    svg.setAttribute('height', '30');
+    svg.classList.add('delete');
     path.setAttribute('d', 'M18.87 6h1.007l-.988 16.015A1.051 1.051 0 0 1 17.84 23H6.158a1.052 1.052 0 0 1-1.048-.984v-.001L4.123 6h1.003l.982 15.953a.05.05 0 0 0 .05.047h11.683zM9.5 19a.5.5 0 0 0 .5-.5v-10a.5.5 0 0 0-1 0v10a.5.5 0 0 0 .5.5zm5 0a.5.5 0 0 0 .5-.5v-10a.5.5 0 0 0-1 0v10a.5.5 0 0 0 .5.5zM5.064 5H3V4h5v-.75A1.251 1.251 0 0 1 9.25 2h5.5A1.251 1.251 0 0 1 16 3.25V4h5v1H5.064zM9 4h6v-.75a.25.25 0 0 0-.25-.25h-5.5a.25.25 0 0 0-.25.25z');
     rect.setAttribute('x', '0');
     rect.setAttribute('y', '0');
@@ -334,11 +338,13 @@ function create_delete_icon(tree_app, obj) {
     svg.appendChild(path);
     svg.appendChild(rect);
     svg.addEventListener('click', (e) => {
-        console.log(e.button);
-        tree_app.pool.remove(obj.el_key, tree_app.svg_groups.elements);
-        tree_app.current_state.active_obj = null;
+        if (e.button === 0) {
+            tree_app.pool.remove(obj.el_key, tree_app.svg_groups.elements);
+            tree_app.current_state.active_obj = null;
+        }
     });
     obj.el.appendChild(svg);
+    return svg;
 }
 let modes;
 let normal_mode;
@@ -491,6 +497,8 @@ function set_normal_mode(tree_app) {
     };
     const handle_mouse_down = (e) => {
         const target = e.target;
+        if (e.button !== 0)
+            return;
         if (target !== null && target.id === 'grid') {
             el_dragged = tree_app.svg_groups.tree_grid;
             is_dragging = true;
@@ -506,10 +514,10 @@ function set_normal_mode(tree_app) {
                 if (tree_app.current_state.active_obj !== obj_tmp.el_key) {
                     if (tree_app.current_state.active_obj !== null) {
                         const active_obj = tree_app.pool.get(tree_app.current_state.active_obj);
-                        active_obj.el.removeChild(active_obj.el.getElementsByTagName('svg')[0]);
+                        active_obj.el.removeChild(active_obj.el.getElementsByClassName('delete')[0]);
                     }
                     tree_app.current_state.active_obj = obj_tmp.el_key;
-                    create_delete_icon(tree_app, obj_tmp);
+                    const svg = create_delete_icon(tree_app, obj_tmp);
                 }
             }
         }
@@ -574,6 +582,8 @@ function set_insert_mode_bond(tree_app) {
     const handle_mouse_down = (e) => {
         const target = e.target;
         const obj = search_obj(tree_app, target, 'obj');
+        if (e.button !== 0)
+            return;
         if (obj === null) {
             if (is_putting) {
                 is_putting = false;
@@ -657,7 +667,7 @@ function set_insert_mode_obj(tree_app, e) {
         }
     };
     const handle_mouse_click = (e) => {
-        if (obj === null || !is_putting)
+        if (obj === null || !is_putting || e.button !== 0)
             return;
         tree_app.svg_groups.tree_grid.removeEventListener('mousemove', handle_mouse_move);
         tree_app.svg_groups.tree_grid.addEventListener('mouseover', handle_mouse_over);
@@ -703,7 +713,7 @@ function set_insert_mode_text(tree_app) {
         }
     };
     const handle_mouse_down = (e) => {
-        if (obj === null)
+        if (obj === null || e.button !== 0)
             return;
         if (!is_inserting) {
             if (!obj.has_text) {
@@ -829,9 +839,9 @@ function set_initial_mode(tree_app) {
     grid_pat.setAttribute('width', (GRID_SIZE * 2).toString());
     grid_pat.setAttribute('height', (GRID_SIZE * 2).toString());
     grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="white"/>`);
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="gainsboro"/>`);
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(240, 240, 240)"/>`);
     grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="white"/>`);
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="gainsboro"/>`);
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(240, 240, 240)"/>`);
     const grid = document.getElementById('grid');
     if (grid === null)
         throw new Error('HTML element with ID `grid` is not found!');
