@@ -750,7 +750,8 @@ function set_insert_mode_text(tree_app) {
     const handle_key_up = (e) => {
         if (obj === null)
             return;
-        if (e.code === 'Enter') {
+        console.log(e);
+        if (e.code === 'Enter' || e.code === 'Escape') {
             if (obj.el_text.textContent !== null && obj.el_text.textContent.trim()) {
                 obj.el_text.textContent = obj.el_text.textContent.trim();
                 obj.el_text.style.color = 'black';

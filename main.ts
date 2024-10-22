@@ -830,7 +830,8 @@ function set_insert_mode_text(tree_app: TreeApp) {
 
     const handle_key_up = (e: KeyboardEvent) => {
         if (obj === null) return;
-        if (e.code === 'Enter') {
+        console.log(e);
+        if (e.code === 'Enter' || e.code === 'Escape') {
             if (obj.el_text.textContent !== null && obj.el_text.textContent.trim()) {
                 obj.el_text.textContent = obj.el_text.textContent.trim();
                 obj.el_text.style.color = 'black';
@@ -1073,7 +1074,7 @@ if (document.readyState === "loading") {
 }
 //TODO 
 //1) increase dim of Obj if text is large
-//2) Botão e função para deletar objetos e vínculos
+//2) Botão e função para deletar vínculos
 //3) Implementar no modo normal uma maneira de mover vínculos, em cada uma das pontas, seja na saída seja na entrada
 //4)??? Adicionar um cursor customizado para cada uma das funções do menu
 // https://blog.logrocket.com/creating-custom-mouse-cursor-css/
