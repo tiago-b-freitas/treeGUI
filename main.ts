@@ -7,7 +7,9 @@ const BOARD_SIZE_Y  = MAX_GRID_Y*GRID_SIZE*5;
 //https://www.color-hex.com/color-palette/104059
 const OBJ_COLOR = '#f2f2e2';
 const OBJ_COLOR_ACTIVE = '#ffffee'
-const OBJ_COLOR_MOVE = '#fffff0a0'
+const OBJ_COLOR_MOVE = '#fffff010'
+const BOND_COLOR = 'black';
+const BOND_COLOR_ACTIVE = '#575757';
 const PAN_SPEED = 5;
 const SCALE_FACTOR = 1.5;
 const D_SCALE_FACTOR = 0.9
@@ -120,47 +122,86 @@ class Vector2 {
     public set_from_vector(v: Vector2): void {
         this.set_xy(v.x, v.y);
     }
+    public normalize(v: Vector2): Vector2 {
+        return this.sub(v).div(this.len(v));
+    }
 }
 
 const OBJ_DIM = new Vector2(15*GRID_SIZE, 6*GRID_SIZE);
 
 class ElBond {
     el_key: ElKey;
-    el: SVGLineElement;
+    el: SVGGElement;
+    line: SVGLineElement;
+    line_mouse_over: SVGLineElement;
+    x1: number;
+    x2: number;
+    y1: number;
+    y2: number;
+    from: ElKey;
+    to: ElKey | null;
     constructor(el0: ElObj, el1: ElObj | Vector2, tree_app: TreeApp) {
-        this.el = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        this.el = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        this.line_mouse_over = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        this.line_mouse_over.setAttribute('stroke', 'rgba(0, 0, 0, 0)');
+        this.line_mouse_over.setAttribute('stroke-width', '30');
+        this.line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        [this.x1, this.y1, this.x2, this.y2] = [0, 0, 0, 0];
         this.move_to(el0, el1);
-        this.el.setAttribute('stroke', 'black');
-        this.el.setAttribute('stroke-width', '7');
-        this.el.setAttribute('marker-start', 'url(#dot)');
-        this.el.setAttribute('marker-end', 'url(#triangle)');
+
+        this.el.setAttribute('stroke', BOND_COLOR);
+
+        this.line.setAttribute('stroke-width', '7');
+        this.line.setAttribute('marker-start', 'url(#dot)');
+        this.line.setAttribute('marker-end', 'url(#triangle)');
+
         this.el.classList.add('draggable');
+        this.el.classList.add('bond');
         this.el_key = tree_app.pool.push(this, tree_app.svg_groups.elements);
+        this.el.appendChild(this.line);
+        this.el.appendChild(this.line_mouse_over);
+
+        this.from = el0.el_key;
+        if (el1 instanceof ElObj) this.to = el1.el_key;
+        else this.to = null;
     }
     public move_to(el0: ElObj, el1: ElObj | Vector2): void {
         if (el1 instanceof ElObj) {
-            var [x1, y1, x2, y2] = el0.smallest_way_from_el(el1);
+            [this.x1, this.y1, this.x2, this.y2] = el0.smallest_way_from_el(el1);
         } else if (el1 instanceof Vector2) {
-            var [x1, y1, x2, y2] = el0.smallest_way_from_points(el1);
+            [this.x1, this.y1, this.x2, this.y2] = el0.smallest_way_from_points(el1);
         } else {
                 throw new Error(`Improper class ${typeof el1}`);
         }
-        this.el.setAttribute('x1', x1.toString());
-        this.el.setAttribute('y1', y1.toString());
-        this.el.setAttribute('x2', x2.toString());
-        this.el.setAttribute('y2', y2.toString());
+        this.line.setAttribute('x1', this.x1.toString());
+        this.line.setAttribute('y1', this.y1.toString());
+        this.line.setAttribute('x2', this.x2.toString());
+        this.line.setAttribute('y2', this.y2.toString());
+        this.line_mouse_over.setAttribute('x1', this.x1.toString());
+        this.line_mouse_over.setAttribute('y1', this.y1.toString());
+        this.line_mouse_over.setAttribute('x2', this.x2.toString());
+        this.line_mouse_over.setAttribute('y2', this.y2.toString());
     }
-    public move_to_insert_mode(el0: ElObj, el1: Vector2, length: number): void {
-        var [x1, y1, x2, y2] = el0.smallest_way_from_points(el1);
+    public move_to_insert_mode(el0: ElObj, el1: Vector2, length: number, orient: Orient): void {
+        const [x1, y1, x2, y2] = el0.smallest_way_from_points(el1);
         let v1 = new Vector2(x1, y1);
         let v2 = new Vector2(x2, y2);
-        let line_length = v2.len(v1);
-        let d = v2.sub(v1).div(line_length);
-        const v3 = v2.sub(d.scale(length));
-        this.el.setAttribute('x1', x1.toString());
-        this.el.setAttribute('y1', y1.toString());
-        this.el.setAttribute('x2', v3.x.toString());
-        this.el.setAttribute('y2', v3.y.toString());
+        const distance = v2.normalize(v1);
+        const v3 = v2.sub(distance.scale(length));
+        if (orient === 's') {
+            [this.x1, this.y1, this.x2, this.y2] = [x1, y1, v3.x, v3.y];
+        }
+        else if (orient === 'e') {
+            [this.x2, this.y2, this.x1, this.y1] = [x1, y1, v3.x, v3.y];
+        }
+        this.line.setAttribute('x1', this.x1.toString());
+        this.line.setAttribute('y1', this.y1.toString());
+        this.line.setAttribute('x2', this.x2.toString());
+        this.line.setAttribute('y2', this.y2.toString());
+        this.line_mouse_over.setAttribute('x1', this.x1.toString());
+        this.line_mouse_over.setAttribute('y1', this.y1.toString());
+        this.line_mouse_over.setAttribute('x2', this.x2.toString());
+        this.line_mouse_over.setAttribute('y2', this.y2.toString());
     }
 }
 
@@ -316,7 +357,14 @@ class Pool {
         return this.get(el_key);
     }
     public remove(el_key: ElKey, elements: SVGGElement): void {
-        elements.removeChild(this.get(el_key).el);
+        const el = this.get(el_key);
+        if (el instanceof ElBond && el) {
+            (this.get(el.from) as ElObj).childrens.delete(el_key);
+            if (el.to !== null) {
+                (this.get(el.to) as ElObj).childrens.delete(el_key);
+            }
+        }
+        elements.removeChild(el.el);
         this.pool.delete(el_key);
     }
 }
@@ -370,7 +418,7 @@ function cleaner(tree_app: TreeApp): void {
     clean_events(tree_app);
 }
 
-function search_obj(tree_app: TreeApp, target: HTMLElement | null, target_class: string): ElObj | null {
+function search_el(tree_app: TreeApp, target: HTMLElement | null, target_class: string): El | null {
     let obj_tmp: ElObj | null = null;
     for (let i = 0; i < 3 && target !== null && target !== undefined; ++i) {
         if (target.matches(`.${target_class}`)) {
@@ -382,33 +430,61 @@ function search_obj(tree_app: TreeApp, target: HTMLElement | null, target_class:
     return obj_tmp;
 }
 
-function create_delete_icon(tree_app: TreeApp, obj: ElObj): SVGSVGElement {
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        svg.setAttribute('viewBox', '0 0 24 24');
+function create_delete_icon(tree_app: TreeApp, obj: El): SVGSVGElement {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    svg.setAttribute('viewBox', '0 0 24 24');
+
+    const w = 30;
+    const h = 30;
+    if (obj instanceof ElObj) {
         svg.setAttribute('x', '0');
         svg.setAttribute('y', '-40');
-        svg.setAttribute('width', '30');
-        svg.setAttribute('height', '30');
-        svg.classList.add('delete');
-        path.setAttribute('d', 'M18.87 6h1.007l-.988 16.015A1.051 1.051 0 0 1 17.84 23H6.158a1.052 1.052 0 0 1-1.048-.984v-.001L4.123 6h1.003l.982 15.953a.05.05 0 0 0 .05.047h11.683zM9.5 19a.5.5 0 0 0 .5-.5v-10a.5.5 0 0 0-1 0v10a.5.5 0 0 0 .5.5zm5 0a.5.5 0 0 0 .5-.5v-10a.5.5 0 0 0-1 0v10a.5.5 0 0 0 .5.5zM5.064 5H3V4h5v-.75A1.251 1.251 0 0 1 9.25 2h5.5A1.251 1.251 0 0 1 16 3.25V4h5v1H5.064zM9 4h6v-.75a.25.25 0 0 0-.25-.25h-5.5a.25.25 0 0 0-.25.25z');
-        rect.setAttribute('x', '0');
-        rect.setAttribute('y', '0');
-        rect.setAttribute('width', '100%');
-        rect.setAttribute('height', '100%');
-        rect.style.stroke = 'none';
-        rect.style.fill = 'rgba(0, 0, 0, 0)';
-        svg.appendChild(path);
-        svg.appendChild(rect);
-        svg.addEventListener('click', (e: MouseEvent) => {
-            if (e.button === 0) {
-                tree_app.pool.remove(obj.el_key, tree_app.svg_groups.elements);
-                tree_app.current_state.active_obj = null;
-            }
-        });
-        obj.el.appendChild(svg);
-        return svg;
+    } else if (obj instanceof ElBond) {
+        const line = obj;
+        if (line.y2 - line.y1 === 0) {
+            svg.setAttribute('x', ((obj.x1+obj.x2)/2-w/2).toString());
+            svg.setAttribute('y', ((obj.y1+obj.y2)/2-h*1.5).toString());
+        } else if (line.x2 - line.x1 === 0) {
+            svg.setAttribute('x', ((obj.x1+obj.x2)/2+w*.5).toString());
+            svg.setAttribute('y', ((obj.y1+obj.y2)/2-h/2).toString());
+        } else {
+            const x = (line.x2 + line.x1)/2;
+            const y = (line.y2 + line.y1)/2;
+            const slope = (line.y2-line.y1)/(line.x2-line.x1);
+            const intercept = line.y1-slope*line.x1;
+            const slope_perpendicular = -1/slope;
+            const intercept_perpendicular = y - slope_perpendicular * x;
+            let v1 = new Vector2(x, y);
+            let v2 = new Vector2(x-1, (slope_perpendicular*(x-1)+intercept_perpendicular));
+            const distance = v2.normalize(v1);
+            const v3 = v2.add(distance.scale(50));
+            svg.setAttribute('x', v3.x.toString());
+            svg.setAttribute('y', v3.y.toString());
+        }
+
+    }
+    svg.setAttribute('width', w.toString());
+    svg.setAttribute('height', h.toString());
+    svg.classList.add('delete');
+    path.setAttribute('d', 'M18.87 6h1.007l-.988 16.015A1.051 1.051 0 0 1 17.84 23H6.158a1.052 1.052 0 0 1-1.048-.984v-.001L4.123 6h1.003l.982 15.953a.05.05 0 0 0 .05.047h11.683zM9.5 19a.5.5 0 0 0 .5-.5v-10a.5.5 0 0 0-1 0v10a.5.5 0 0 0 .5.5zm5 0a.5.5 0 0 0 .5-.5v-10a.5.5 0 0 0-1 0v10a.5.5 0 0 0 .5.5zM5.064 5H3V4h5v-.75A1.251 1.251 0 0 1 9.25 2h5.5A1.251 1.251 0 0 1 16 3.25V4h5v1H5.064zM9 4h6v-.75a.25.25 0 0 0-.25-.25h-5.5a.25.25 0 0 0-.25.25z');
+    rect.setAttribute('x', '0');
+    rect.setAttribute('y', '0');
+    rect.setAttribute('width', '100%');
+    rect.setAttribute('height', '100%');
+    rect.style.stroke = 'none';
+    rect.style.fill = 'rgba(0, 0, 0, 0)';
+    svg.appendChild(path);
+    svg.appendChild(rect);
+    svg.addEventListener('click', (e: MouseEvent) => {
+        if (e.button === 0) {
+            tree_app.pool.remove(obj.el_key, tree_app.svg_groups.elements);
+            tree_app.current_state.active_obj = null;
+        }
+    });
+    obj.el.appendChild(svg);
+    return svg;
 }
 
 let modes: [HTMLElement, ModeStrings, TypeElStrings][];
@@ -516,12 +592,13 @@ function sleep(ms: number) {
 }
 
 function set_normal_mode(tree_app: TreeApp): void {
-    let el_dragged: ElObj | SVGSVGElement | null = null;
+    let el_dragged: ElObj | SVGSVGElement | ElBond | null = null;
     let is_dragging: boolean = false;
+    let pos: 's' | 'e' | null = null;
     const offset = Vector2.zero();
     const displacement = Vector2.zero();
 
-    const handle_mouse_move = throttle((e: MouseEvent) => {
+    const handle_mouse_move = (e: MouseEvent) => {
         if (!is_dragging) return;
         if (el_dragged instanceof ElObj) {
             el_dragged.el.style.cursor = 'grabbing';
@@ -541,22 +618,58 @@ function set_normal_mode(tree_app: TreeApp): void {
             offset.set_from_vector(mouse_coords);
             tree_app.current_state.zoom_pan_state.pan_x -= displacement.x;
             tree_app.current_state.zoom_pan_state.pan_y -= displacement.y;
+        } else if (el_dragged instanceof ElBond && pos !== null) {
+            const el_from = tree_app.pool.get(el_dragged.from) as ElObj;
+            const el_to = tree_app.pool.get(el_dragged.to as ElKey) as ElObj;
+            const reinsert_args = {
+                starter_obj: pos === 's' ? el_from : el_to,
+                line: el_dragged,
+                orient: pos,
+            };
+            el_from.childrens.delete(el_dragged.el_key);
+            el_to.childrens.delete(el_dragged.el_key);
+            switch_mode(tree_app, null, 'INSERT_MODE', 'BOND', reinsert_args);
         }
-    }, 16.67);
+    };
 
     const handle_mouse_move_grid = (e: MouseEvent) => {
         if (!is_dragging) return;
     };
 
     const handle_mouse_over = (e: MouseEvent) => {
-        const obj = search_obj(tree_app, e.target as HTMLElement, 'draggable');
-        if (is_dragging || obj === null) return;
-        obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
+        const coords = get_coords(tree_app);
+        const el = search_el(tree_app, e.target as HTMLElement, 'draggable');
+        if (is_dragging || el === null) return;
+        if (el instanceof ElObj) el.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
+        else if (el instanceof ElBond) {
+            const triangle = document.getElementById('triangle')
+            const dot = document.getElementById('dot')
+            if (triangle === null || dot === null) throw new Error('Not possible to find id `#triangle` and `#dot`!');
+            if (coords.len(new Vector2(el.x1, el.y1)) <= 100) {
+                dot.style.fill = 'red';
+            } else if (coords.len(new Vector2(el.x2, el.y2)) <= 100) {
+                triangle.style.fill = 'red';
+            } else {
+                el.el.setAttribute('stroke', BOND_COLOR_ACTIVE);
+                triangle.style.fill = BOND_COLOR_ACTIVE;
+                dot.style.fill = BOND_COLOR_ACTIVE;
+            }
+        }
     };
 
     const handle_mouse_out = (e: MouseEvent) => {
-        const obj = search_obj(tree_app, e.target as HTMLElement, 'draggable');
-        if (!is_dragging && obj !== null) obj.el.setAttribute('fill', OBJ_COLOR);
+        if (is_dragging) return
+        const el = search_el(tree_app, e.target as HTMLElement, 'draggable');
+        if (el === null) return;
+        if (el instanceof ElObj) el.el.setAttribute('fill', OBJ_COLOR);
+        else if (el instanceof ElBond) {
+            el.el.setAttribute('stroke', BOND_COLOR);
+            const triangle = document.getElementById('triangle')
+            const dot = document.getElementById('dot')
+            if (triangle === null || dot === null) throw new Error('Not possible to find id `#triangle` and `#dot`!');
+            triangle.style.fill = BOND_COLOR;
+            dot.style.fill = BOND_COLOR;
+        }
     };
 
     const handle_mouse_down = (e: MouseEvent) => {
@@ -567,12 +680,27 @@ function set_normal_mode(tree_app: TreeApp): void {
             is_dragging = true;
             offset.set_from_vector(mouse_coords);
         } else {
-            const obj_tmp = search_obj(tree_app, target, 'draggable');
+            const obj_tmp = search_el(tree_app, target, 'draggable');
             if (obj_tmp !== null) {
-                el_dragged = obj_tmp;
-                el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
-                is_dragging = true;
-                offset.set_from_vector(get_coords(tree_app).sub(el_dragged.coords));
+                if (obj_tmp instanceof ElObj) {
+                    el_dragged = obj_tmp;
+                    el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
+                    is_dragging = true;
+                    offset.set_from_vector(get_coords(tree_app).sub(el_dragged.coords));
+                } else if (obj_tmp instanceof ElBond) {
+                    const triangle = document.getElementById('triangle')
+                    const dot = document.getElementById('dot')
+                    if (triangle === null || dot === null) throw new Error('Not possible to find id `#triangle` and `#dot`!');
+                    const coords = get_coords(tree_app);
+                    if (coords.len(new Vector2(obj_tmp.x1, obj_tmp.y1)) <= 100) {
+                        pos = 'e';
+                    } else if (coords.len(new Vector2(obj_tmp.x2, obj_tmp.y2)) <= 100) {
+                        pos = 's';
+                    }
+                    el_dragged = obj_tmp;
+                    el_dragged.el.setAttribute('fill', OBJ_COLOR_MOVE);
+                    is_dragging = true;
+                }
                 if (tree_app.current_state.active_obj !== obj_tmp.el_key) {
                     if (tree_app.current_state.active_obj !== null) {
                         const active_obj = tree_app.pool.get(tree_app.current_state.active_obj);
@@ -635,14 +763,29 @@ function get_coords(tree_app: TreeApp): Vector2 {
     return mouse_coords.multiply(ctm.inverse()).add(padding);
 }
 
-function set_insert_mode_bond(tree_app: TreeApp): void {
+type Orient = 's' | 'e';
+type Reinsert = {
+    starter_obj: ElObj,
+    line: ElBond,
+    orient: Orient;
+};
+
+function set_insert_mode_bond(tree_app: TreeApp, reinsert_args?: Reinsert): void {
     let starter_obj: ElObj | null = null;
     let line: ElBond | null = null;
     let is_putting: boolean = false;
+    let orient: Orient = 's';
+
+    if (reinsert_args !== undefined) {
+        starter_obj = reinsert_args.starter_obj; 
+        line = reinsert_args.line;
+        orient = reinsert_args.orient;
+        is_putting = true;
+    }
 
     const handle_mouse_over = (e: MouseEvent) => {
         const target: HTMLElement | null = e.target as HTMLElement;
-        const obj = search_obj(tree_app, target, 'obj');
+        const obj = search_el(tree_app, target, 'obj');
         if (obj !== null && (starter_obj === null || starter_obj.el_key !== obj.el_key)) {
             obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
         }
@@ -650,7 +793,7 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
 
     const handle_mouse_down = (e: MouseEvent) => {
         const target: HTMLElement | null = e.target as HTMLElement;
-        const obj = search_obj(tree_app, target, 'obj');
+        const obj = search_el(tree_app, target, 'obj') as ElObj;
         if (e.button !== 0) return;
         if (obj === null) {
             if (is_putting) {
@@ -668,7 +811,7 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
             return;
         }
         if (!is_putting && starter_obj === null && line === null) {
-            starter_obj = obj;
+            starter_obj = obj as ElObj;
             starter_obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
             line = new ElBond(starter_obj, get_coords(tree_app), tree_app);
             tree_app.tmps.push([TypeTmp.LINE, line.el_key]);
@@ -681,28 +824,38 @@ function set_insert_mode_bond(tree_app: TreeApp): void {
                 is_bonded = obj.el_key === other_obj_key;
             }
             if (!is_bonded) {
-                line.move_to(starter_obj as ElObj, obj);
+                if (orient === 's') {
+                    line.move_to(starter_obj as ElObj, obj);
+                    starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
+                    obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
+                } else if (orient === 'e') {
+                    line.move_to(obj, starter_obj as ElObj);
+                    starter_obj.childrens.set(line.el_key, ['e', obj.el_key]);
+                    obj.childrens.set(line.el_key, ['s', starter_obj.el_key]);
+                }
+                line.to = obj.el_key;
                 starter_obj.el.setAttribute('fill', OBJ_COLOR);
                 obj.el.setAttribute('fill', OBJ_COLOR);
-                starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
-                obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
                 tree_app.tmps.pop();
                 is_putting = false;
                 starter_obj = null;
                 line = null;
+                if (reinsert_args !== undefined) {
+                    switch_mode(tree_app, null, "NORMAL_MODE");
+                }
             }
         }
     };
 
     const handle_mouse_move = throttle((e: MouseEvent) => {
         if (is_putting && starter_obj !== null && line !== null) {
-            line.move_to_insert_mode(starter_obj, get_coords(tree_app), 50);
+            line.move_to_insert_mode(starter_obj, get_coords(tree_app), 30, orient);
         }
     }, 16.67);
 
     const handle_mouse_out = (e: MouseEvent) => {
         const target: HTMLElement | null = e.target as HTMLElement;
-        const obj = search_obj(tree_app, target, 'obj');
+        const obj = search_el(tree_app, target, 'obj');
         if (obj !== null && (starter_obj === null || starter_obj.el_key !== obj.el_key)) {
             obj.el.setAttribute('fill', OBJ_COLOR);
         }
@@ -777,9 +930,9 @@ function set_insert_mode_text(tree_app: TreeApp) {
 
     const handle_mouse_over = (e: MouseEvent) => {
         const target: HTMLElement | null = e.target as HTMLElement;
-        const obj_tmp: ElObj | null = search_obj(tree_app, target, 'obj');
+        const obj_tmp: El | null = search_el(tree_app, target, 'obj');
         if (obj === null && obj_tmp !== null) {
-            obj = obj_tmp;
+            obj = obj_tmp as ElObj;
             obj.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
             obj.el_text.style.border = '2px dashed cadetblue';
             obj.el_text.contentEditable = 'true';
@@ -830,8 +983,7 @@ function set_insert_mode_text(tree_app: TreeApp) {
 
     const handle_key_up = (e: KeyboardEvent) => {
         if (obj === null) return;
-        console.log(e);
-        if (e.code === 'Enter' || e.code === 'Escape') {
+        if (e.code === 'Enter' || e.key === 'Escape') {
             if (obj.el_text.textContent !== null && obj.el_text.textContent.trim()) {
                 obj.el_text.textContent = obj.el_text.textContent.trim();
                 obj.el_text.style.color = 'black';
@@ -863,7 +1015,7 @@ function set_insert_mode_text(tree_app: TreeApp) {
     tree_app.events.push(['keyup', handle_key_up]);
 }
 
-function switch_mode(tree_app: TreeApp, e: KeyboardEvent | null, mode: ModeStrings, type_el?: TypeElStrings): void {
+function switch_mode(tree_app: TreeApp, e: KeyboardEvent | null, mode: ModeStrings, type_el?: TypeElStrings, optional_args?: Reinsert): void {
     if (Mode[mode] === Mode[tree_app.current_mode] && type_el === tree_app.current_type_el) {
         return;
     }
@@ -886,7 +1038,7 @@ function switch_mode(tree_app: TreeApp, e: KeyboardEvent | null, mode: ModeStrin
             console.log(`Inserting ${type_el}.`);
             switch (TypeEl[type_el]) {
                 case TypeEl.BOND:
-                    set_insert_mode_bond(tree_app);
+                    set_insert_mode_bond(tree_app, optional_args);
                     break;
                 case TypeEl.OBJ:
                     set_insert_mode_obj(tree_app, e);
@@ -1081,10 +1233,9 @@ if (document.readyState === "loading") {
 //7) Implementar um sistema de undo e redo
 //9) Keep bond line more close of mouse
 //10) ver se é possível corrigir o erro de o cursor do mouse aparecer embaixo quando clica para editar no modo texto
-//11) Adicionar o esc para cancelar o texto no modo texto
 //12) movimentar o grid com o mouse é muito lento quando em excessivo zoom out 
 //13) zoom in and zoom out com o mouse wheel
 //15) bug no modo de inserir texto, quando um texto está ativo e eu clico em outro obj, eu preciso sair do obj para ativar a inserção.
 //16)Adicionar um indicar de qual o zoom no momento e em qual posição (x=0, y=0, é o centro);
 //17) adicionar um limite para movimentação pan
-//18) apenas o botão do mouse esquerdo, no momento o botão direito também movimenta e faz as ações
+//18) Adicionar um efeito de magneto quando inserir o elemento de vinculação ao se aproximar de um objeto.

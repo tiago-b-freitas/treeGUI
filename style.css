@@ -48,6 +48,9 @@ table {
 }
 /* end reset.css */
 
+:root {
+    --grayish: #575757;
+}
 html, body {
   width: 100%;
   height: 100%;
@@ -135,4 +138,10 @@ text {
 }
 .delete:hover path {
   stroke: rgb(80, 80, 110);
+}
+line.draggable:hover {
+  stroke: var(--grayish);
+} 
+marker {
+    fill: black;
 }
