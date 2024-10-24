@@ -60,6 +60,9 @@ class Vector2 {
     add(other) {
         return new Vector2(this.x + other.x, this.y + other.y);
     }
+    add_scalar(scalar) {
+        return new Vector2(this.x + scalar, this.y + scalar);
+    }
     div(scalar) {
         return new Vector2(this.x / scalar, this.y / scalar);
     }
@@ -82,8 +85,19 @@ class Vector2 {
     normalize(v) {
         return this.sub(v).div(this.len(v));
     }
+    abs() {
+        return new Vector2(Math.abs(this.x), Math.abs(this.y));
+    }
+    is_equal(v) {
+        return this.x === v.x && this.y === v.y;
+    }
 }
 const OBJ_DIM = new Vector2(15 * GRID_SIZE, 6 * GRID_SIZE);
+const OBJS_CHARS_LIMITS = [];
+for (let i = 0; i < 5; ++i) {
+    OBJS_CHARS_LIMITS.push((i * 3 + 38) * (i * 2 + 6));
+}
+const CHARS_MAX_LIMIT = OBJS_CHARS_LIMITS.pop();
 class ElBond {
     el_key;
     el;
@@ -170,7 +184,7 @@ class ElObj {
     coords;
     size;
     start_points;
-    constructor(coords, size, tree_app) {
+    constructor(coords, tree_app) {
         let group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         let rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         let foreignObj = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
@@ -183,16 +197,17 @@ class ElObj {
         this.el_text_wrapper.appendChild(this.el_text);
         this.el.appendChild(this.el_text_wrapper);
         this.el_key = tree_app.pool.push(this, tree_app.svg_groups.elements);
+        this.size = OBJ_DIM;
         this.el_rect.setAttribute('x', '0');
         this.el_rect.setAttribute('y', '0');
         this.el_text_wrapper.setAttribute('x', '0');
         this.el_text_wrapper.setAttribute('y', '0');
-        this.el_text_wrapper.setAttribute('width', (size.x).toString());
-        this.el_text_wrapper.setAttribute('height', (size.y).toString());
+        this.el_text_wrapper.setAttribute('width', (this.size.x).toString());
+        this.el_text_wrapper.setAttribute('height', (this.size.y).toString());
         this.el_text.style.wordWrap = 'break-word';
         this.el_text.style.wordBreak = 'break-word';
-        this.el_text.style.width = `${(size.x - 20)}px`;
-        this.el_text.style.height = `${(size.y - 20)}px`;
+        this.el_text.style.width = `${(this.size.x - 20)}px`;
+        this.el_text.style.height = `${(this.size.y - 20)}px`;
         this.el_text.style.position = 'relative';
         this.el_text.style.top = '8px';
         this.el_text.style.left = '8px';
@@ -203,7 +218,6 @@ class ElObj {
         this.el_text.style.userSelect = 'none';
         this.el_text.textContent = STD_TEXT;
         this.has_text = false;
-        this.size = size;
         this.el_rect.setAttribute('width', this.size.x.toString());
         this.el_rect.setAttribute('height', this.size.y.toString());
         this.el.setAttribute('fill', 'rgba(255, 255, 255, 0.3');
@@ -270,6 +284,28 @@ class ElObj {
             || e_coords.x > this.coords.x + this.size.x
             || e_coords.y < this.coords.y
             || e_coords.y > this.coords.y + this.size.y;
+    }
+    propagate_size() {
+        this.el_rect.setAttribute('width', this.size.x.toString());
+        this.el_rect.setAttribute('height', this.size.y.toString());
+        this.el_text_wrapper.setAttribute('width', (this.size.x).toString());
+        this.el_text_wrapper.setAttribute('height', (this.size.y).toString());
+        this.el_text.style.width = `${(this.size.x - 20)}px`;
+        this.el_text.style.height = `${(this.size.y - 20)}px`;
+        this.get_start_points();
+    }
+    resize(n_chars) {
+        let factor = 0;
+        for (const chars_limit of OBJS_CHARS_LIMITS) {
+            if (n_chars <= chars_limit)
+                break;
+            factor += 1;
+        }
+        const new_size = OBJ_DIM.add_scalar(GRID_SIZE * factor);
+        if (!this.size.is_equal(new_size)) {
+            this.size = new_size;
+            this.propagate_size();
+        }
     }
 }
 class Pool {
@@ -352,6 +388,7 @@ function clean_tmps(tree_app) {
                     obj.el_text.style.color = 'gray';
                     obj.has_text = false;
                 }
+                obj.resize(obj.el_text.textContent.length);
                 obj.el.setAttribute('fill', OBJ_COLOR);
                 obj.el_text.style.border = '';
                 obj.el_text.contentEditable = 'false';
@@ -884,7 +921,7 @@ function set_insert_mode_obj(tree_app, e) {
     const handle_mouse_over = (e) => {
         if (obj === null) {
             const coords = get_coords(tree_app).sub(OBJ_DIM.div(2));
-            obj = new ElObj(coords, OBJ_DIM, tree_app);
+            obj = new ElObj(coords, tree_app);
             tree_app.tmps.push([TypeTmp.OBJ, obj.el_key]);
             tree_app.svg_groups.tree_grid.removeEventListener('mouseover', handle_mouse_over);
             tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move);
@@ -909,7 +946,7 @@ function set_insert_mode_obj(tree_app, e) {
     tree_app.events.push(['mousemove', handle_mouse_move]);
     if (e !== null && e.code === 'KeyC') {
         const coords = get_coords(tree_app).sub(OBJ_DIM.div(2)).div(GRID_SIZE).round().scale(GRID_SIZE);
-        obj = new ElObj(coords, OBJ_DIM, tree_app);
+        obj = new ElObj(coords, tree_app);
         tree_app.tmps.push([TypeTmp.OBJ, obj.el_key]);
         tree_app.svg_groups.tree_grid.removeEventListener('mouseover', handle_mouse_over);
         tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move);
@@ -966,6 +1003,7 @@ function set_insert_mode_text(tree_app) {
                 obj.el_text.style.color = 'gray';
                 obj.has_text = false;
             }
+            obj.resize(obj.el_text.textContent.length);
             is_inserting = false;
             obj.el_text.style.userSelect = 'none';
             obj.el_text.contentEditable = 'false';
@@ -990,8 +1028,10 @@ function set_insert_mode_text(tree_app) {
             }
         }
     };
-    const handle_key_up = (e) => {
+    const handle_key_press = (e) => {
         if (obj === null)
+            return;
+        if (obj.el_text.textContent !== null && obj.el_text.textContent.length > CHARS_MAX_LIMIT)
             return;
         if (e.code === 'Enter' || e.key === 'Escape') {
             if (obj.el_text.textContent !== null && obj.el_text.textContent.trim()) {
@@ -1004,6 +1044,7 @@ function set_insert_mode_text(tree_app) {
                 obj.el_text.style.color = 'gray';
                 obj.has_text = false;
             }
+            obj.resize(obj.el_text.textContent.length);
             is_inserting = false;
             obj.el_text.contentEditable = 'false';
             obj.el_text.style.padding = '';
@@ -1012,15 +1053,16 @@ function set_insert_mode_text(tree_app) {
             window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
             window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
         }
-        else {
+        else if (obj.el_text.textContent !== null) {
+            obj.resize(obj.el_text.textContent.length);
         }
     };
-    tree_app.svg_groups.tree_grid.addEventListener('keyup', handle_key_up);
+    tree_app.svg_groups.tree_grid.addEventListener('keypress', handle_key_press);
     tree_app.svg_groups.tree_grid.addEventListener('mouseover', handle_mouse_over);
     tree_app.svg_groups.tree_grid.addEventListener('mousedown', handle_mouse_down);
     tree_app.events.push(['mouseover', handle_mouse_over]);
     tree_app.events.push(['mousedown', handle_mouse_down]);
-    tree_app.events.push(['keyup', handle_key_up]);
+    tree_app.events.push(['keypress', handle_key_press]);
 }
 function switch_mode(tree_app, e, mode, type_el, optional_args) {
     if (Mode[mode] === Mode[tree_app.current_mode] && type_el === tree_app.current_type_el) {
