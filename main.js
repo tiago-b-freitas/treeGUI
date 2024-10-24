@@ -11,7 +11,7 @@ const BOND_COLOR = 'black';
 const BOND_COLOR_ACTIVE = '#575757';
 const PAN_SPEED = 5;
 const SCALE_FACTOR = 1.5;
-const D_SCALE_FACTOR = 0.9;
+const D_SCALE_FACTOR = 0.8;
 const STD_TEXT = 'Insira o texto aqui';
 var Mode;
 (function (Mode) {
@@ -300,10 +300,15 @@ class Pool {
     }
     remove(el_key, elements) {
         const el = this.get(el_key);
-        if (el instanceof ElBond && el) {
+        if (el instanceof ElBond) {
             this.get(el.from).childrens.delete(el_key);
             if (el.to !== null) {
                 this.get(el.to).childrens.delete(el_key);
+            }
+        }
+        else if (el instanceof ElObj) {
+            for (const [line_key, [..._]] of el.childrens) {
+                this.remove(line_key, elements);
             }
         }
         elements.removeChild(el.el);
@@ -484,13 +489,17 @@ function reset_zoom_and_pan(tree_app) {
     const x = Math.floor((BOARD_SIZE_X - screen_w) / 2);
     const y = Math.floor((BOARD_SIZE_Y - screen_h) / 2);
     tree_app.svg_groups.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
+    grid_center.set_xy(x, y);
     tree_app.svg_groups.tree_grid.setAttribute('width', screen_w.toString());
     tree_app.svg_groups.tree_grid.setAttribute('height', screen_h.toString());
     tree_app.current_state.zoom_pan_state.zoom_level = 0;
+    tree_app.current_state.zoom_pan_state.pan_x = tree_app.svg_groups.tree_grid.viewBox.baseVal.x;
+    tree_app.current_state.zoom_pan_state.pan_y = tree_app.svg_groups.tree_grid.viewBox.baseVal.y;
+    return [screen_w, screen_h];
 }
 function zoom_in(tree_app) {
     if (tree_app.current_state.zoom_pan_state.zoom_level < tree_app.limits.max_zoom_in) {
-        tree_app.current_state.zoom_pan_state.zoom_level += 1;
+        tree_app.current_state.zoom_pan_state.zoom_level += SCALE_FACTOR;
         const w = tree_app.svg_groups.tree_grid.viewBox.baseVal.width;
         const h = tree_app.svg_groups.tree_grid.viewBox.baseVal.height;
         tree_app.svg_groups.tree_grid.viewBox.baseVal.width /= SCALE_FACTOR;
@@ -501,7 +510,7 @@ function zoom_in(tree_app) {
 }
 function zoom_out(tree_app) {
     if (tree_app.current_state.zoom_pan_state.zoom_level > tree_app.limits.max_zoom_out) {
-        tree_app.current_state.zoom_pan_state.zoom_level -= 1;
+        tree_app.current_state.zoom_pan_state.zoom_level -= SCALE_FACTOR;
         const w = tree_app.svg_groups.tree_grid.viewBox.baseVal.width;
         const h = tree_app.svg_groups.tree_grid.viewBox.baseVal.height;
         tree_app.svg_groups.tree_grid.viewBox.baseVal.width *= SCALE_FACTOR;
@@ -510,6 +519,15 @@ function zoom_out(tree_app) {
         tree_app.current_state.zoom_pan_state.pan_y += h * (1 - SCALE_FACTOR) / 2;
     }
 }
+const wrapper_handler_window_wheel_zoom_and_pan = (e) => {
+    handler_window_wheel_zoom_and_pan(e, tree_app);
+};
+const handler_window_wheel_zoom_and_pan = (e, tree_app) => {
+    if (e.deltaY < 0)
+        zoom_in(tree_app);
+    else if (e.deltaY > 0)
+        zoom_out(tree_app);
+};
 const wrapper_handler_window_keyup_zoom_and_pan = (e) => {
     handler_window_keyup_zoom_and_pan(e, tree_app);
 };
@@ -1046,18 +1064,9 @@ function switch_mode(tree_app, e, mode, type_el, optional_args) {
             break;
     }
 }
-const center = Vector2.zero();
+const grid_center = Vector2.zero();
 function set_initial_mode(tree_app) {
-    const screen_w = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
-    const screen_h = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
-    const x = Math.floor((BOARD_SIZE_X - screen_w) / 2);
-    const y = Math.floor((BOARD_SIZE_Y - screen_h) / 2);
-    center.set_xy(x, y);
-    tree_app.svg_groups.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
-    tree_app.svg_groups.tree_grid.setAttribute('width', screen_w.toString());
-    tree_app.svg_groups.tree_grid.setAttribute('height', screen_h.toString());
-    tree_app.current_state.zoom_pan_state.pan_x = tree_app.svg_groups.tree_grid.viewBox.baseVal.x;
-    tree_app.current_state.zoom_pan_state.pan_y = tree_app.svg_groups.tree_grid.viewBox.baseVal.y;
+    const [screen_w, screen_h] = reset_zoom_and_pan(tree_app);
     const grid_pat = document.getElementById('grid-pat');
     if (grid_pat === null)
         throw new Error('HTML element with ID `grid-pat` not found!');
@@ -1080,14 +1089,7 @@ function set_initial_mode(tree_app) {
     menu_grid.style.top = ((screen_h - Number(menu_grid.getAttribute('height'))) / 2).toString();
     window.addEventListener('resize', (event) => {
         {
-            const screen_w = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
-            const screen_h = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
-            const x = Math.floor((BOARD_SIZE_X - screen_w) / 2);
-            const y = Math.floor((BOARD_SIZE_Y - screen_h) / 2);
-            center.set_xy(x, y);
-            tree_app.svg_groups.tree_grid.setAttribute('viewBox', `${x} ${y} ${screen_w} ${screen_h}`);
-            tree_app.svg_groups.tree_grid.setAttribute('width', `${screen_w}`);
-            tree_app.svg_groups.tree_grid.setAttribute('height', `${screen_h}`);
+            const [screen_w, screen_h] = reset_zoom_and_pan(tree_app);
             menu_grid.style.top = ((screen_h - Number(menu_grid.getAttribute('height'))) / 2).toString();
         }
     });
@@ -1137,6 +1139,7 @@ function set_initial_mode(tree_app) {
     });
     window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
     window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
+    window.addEventListener('wheel', wrapper_handler_window_wheel_zoom_and_pan);
 }
 function proxy_zoom_pan_constructor(zoom_pan_holder) {
     return new Proxy(zoom_pan_holder, {
@@ -1160,7 +1163,7 @@ function proxy_zoom_pan_constructor(zoom_pan_holder) {
                     home_icon.style.display = 'none';
             }
             else {
-                if (target['pan_x'] !== center.x || target['pan_y'] !== center.y)
+                if (target['pan_x'] !== grid_center.x || target['pan_y'] !== grid_center.y)
                     home_icon.style.display = 'inline';
                 else
                     home_icon.style.display = 'none';
@@ -1203,8 +1206,8 @@ function main() {
         events: [],
         tmps: [],
         limits: {
-            max_zoom_out: -4,
-            max_zoom_in: 3,
+            max_zoom_out: -6,
+            max_zoom_in: 4.5,
         }
     };
     switch_mode(tree_app, null, "INITIAL_MODE");
