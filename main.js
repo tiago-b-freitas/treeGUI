@@ -1057,10 +1057,10 @@ function set_initial_mode(tree_app) {
         throw new Error('HTML element with ID `grid-pat` not found!');
     grid_pat.setAttribute('width', (GRID_SIZE * 2).toString());
     grid_pat.setAttribute('height', (GRID_SIZE * 2).toString());
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="black"/>`);
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(90, 90, 90)"/>`);
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="black"/>`);
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(90, 90, 90)"/>`);
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="white"/>`);
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(240, 240, 240)"/>`);
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="white"/>`);
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(240, 240, 240)"/>`);
     const grid = document.getElementById('grid');
     if (grid === null)
         throw new Error('HTML element with ID `grid` is not found!');
