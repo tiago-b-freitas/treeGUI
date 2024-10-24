@@ -337,6 +337,16 @@ function clean_tmps(tree_app) {
                 break;
             case TypeTmp.TEXT:
                 const obj = tree_app.pool.get(el_key);
+                if (obj.el_text.textContent !== null && obj.el_text.textContent.trim()) {
+                    obj.el_text.textContent = obj.el_text.textContent.trim();
+                    obj.el_text.style.color = 'black';
+                    obj.has_text = true;
+                }
+                else {
+                    obj.el_text.textContent = STD_TEXT;
+                    obj.el_text.style.color = 'gray';
+                    obj.has_text = false;
+                }
                 obj.el.setAttribute('fill', OBJ_COLOR);
                 obj.el_text.style.border = '';
                 obj.el_text.contentEditable = 'false';
@@ -525,6 +535,10 @@ const handler_window_keyup_zoom_and_pan = (e, tree_app) => {
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
+function register_event(tree_app, type, listener) {
+    tree_app.svg_groups.tree_grid.addEventListener(type, listener);
+    tree_app.events.push([type, listener]);
+}
 function set_normal_mode(tree_app) {
     let el_dragged = null;
     let is_dragging = false;
@@ -560,6 +574,7 @@ function set_normal_mode(tree_app) {
             const el_to = tree_app.pool.get(el_dragged.to);
             const reinsert_args = {
                 starter_obj: pos === 's' ? el_from : el_to,
+                initial_obj: pos === 'e' ? el_from : el_to,
                 line: el_dragged,
                 orient: pos,
             };
@@ -759,16 +774,7 @@ function set_insert_mode_bond(tree_app, reinsert_args) {
                 is_bonded = obj.el_key === other_obj_key;
             }
             if (!is_bonded) {
-                if (orient === 's') {
-                    line.move_to(starter_obj, obj);
-                    starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
-                    obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
-                }
-                else if (orient === 'e') {
-                    line.move_to(obj, starter_obj);
-                    starter_obj.childrens.set(line.el_key, ['e', obj.el_key]);
-                    obj.childrens.set(line.el_key, ['s', starter_obj.el_key]);
-                }
+                bond_line(obj, starter_obj, line);
                 line.to = obj.el_key;
                 starter_obj.el.setAttribute('fill', OBJ_COLOR);
                 obj.el.setAttribute('fill', OBJ_COLOR);
@@ -794,14 +800,52 @@ function set_insert_mode_bond(tree_app, reinsert_args) {
             obj.el.setAttribute('fill', OBJ_COLOR);
         }
     };
-    tree_app.svg_groups.tree_grid.addEventListener('mouseover', handle_mouse_over);
-    tree_app.svg_groups.tree_grid.addEventListener('mouseout', handle_mouse_out);
-    tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move);
-    tree_app.svg_groups.tree_grid.addEventListener('mousedown', handle_mouse_down);
-    tree_app.events.push(['mouseover', handle_mouse_over]);
-    tree_app.events.push(['mouseout', handle_mouse_out]);
-    tree_app.events.push(['mousemove', handle_mouse_move]);
-    tree_app.events.push(['mousedown', handle_mouse_down]);
+    function bond_line(obj, starter_obj, line) {
+        if (orient === 's') {
+            line.move_to(starter_obj, obj);
+            starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
+            obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
+            line.to = obj.el_key;
+        }
+        else if (orient === 'e') {
+            line.move_to(obj, starter_obj);
+            starter_obj.childrens.set(line.el_key, ['e', obj.el_key]);
+            obj.childrens.set(line.el_key, ['s', starter_obj.el_key]);
+            line.from = obj.el_key;
+        }
+    }
+    const handle_mouse_up = (e) => {
+        if (reinsert_args !== undefined && starter_obj !== null && line !== null) {
+            const target = e.target;
+            const obj = search_el(tree_app, target, 'obj');
+            if (obj === null || obj.el_key === starter_obj.el_key) {
+                const obj = reinsert_args.initial_obj;
+                bond_line(obj, starter_obj, line);
+            }
+            else {
+                let is_bonded = false;
+                ;
+                for (const [_, other_obj_key] of starter_obj.childrens.values()) {
+                    is_bonded = obj.el_key === other_obj_key;
+                }
+                if (!is_bonded) {
+                    bond_line(obj, starter_obj, line);
+                    starter_obj.el.setAttribute('fill', OBJ_COLOR);
+                    obj.el.setAttribute('fill', OBJ_COLOR);
+                }
+            }
+            tree_app.tmps.pop();
+            is_putting = false;
+            starter_obj = null;
+            line = null;
+            switch_mode(tree_app, null, "NORMAL_MODE");
+        }
+    };
+    register_event(tree_app, 'mouseover', handle_mouse_over);
+    register_event(tree_app, 'mouseout', handle_mouse_out);
+    register_event(tree_app, 'mousemove', handle_mouse_move);
+    register_event(tree_app, 'mousedown', handle_mouse_down);
+    register_event(tree_app, 'mouseup', handle_mouse_up);
 }
 function set_insert_mode_obj(tree_app, e) {
     let is_putting = false;
@@ -867,6 +911,11 @@ function set_insert_mode_text(tree_app) {
             obj = null;
             tree_app.tmps.pop();
         }
+        else if (is_inserting && obj !== null && obj_tmp !== null) {
+            obj_tmp.el.setAttribute('fill', OBJ_COLOR_ACTIVE);
+            obj_tmp.el_text.style.border = '2px dashed cadetblue';
+            obj_tmp.el_text.contentEditable = 'true';
+        }
     };
     const handle_mouse_down = (e) => {
         if (obj === null || e.button !== 0)
@@ -901,6 +950,20 @@ function set_insert_mode_text(tree_app) {
             tree_app.tmps.pop();
             window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
             window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
+            const obj_tmp = search_el(tree_app, e.target, 'obj');
+            if (obj_tmp !== null) {
+                obj = obj_tmp;
+                tree_app.tmps.push([TypeTmp.TEXT, obj_tmp.el_key]);
+                if (!obj.has_text) {
+                    obj.el_text.textContent = '';
+                }
+                obj.el_text.style.border = '';
+                obj.el_text.style.padding = '2px';
+                obj.el_text.style.userSelect = 'text';
+                is_inserting = true;
+                window.removeEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
+                window.removeEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
+            }
         }
     };
     const handle_key_up = (e) => {
@@ -994,10 +1057,10 @@ function set_initial_mode(tree_app) {
         throw new Error('HTML element with ID `grid-pat` not found!');
     grid_pat.setAttribute('width', (GRID_SIZE * 2).toString());
     grid_pat.setAttribute('height', (GRID_SIZE * 2).toString());
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="white"/>`);
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(240, 240, 240)"/>`);
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="white"/>`);
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(240, 240, 240)"/>`);
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="black"/>`);
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(90, 90, 90)"/>`);
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="black"/>`);
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(90, 90, 90)"/>`);
     const grid = document.getElementById('grid');
     if (grid === null)
         throw new Error('HTML element with ID `grid` is not found!');

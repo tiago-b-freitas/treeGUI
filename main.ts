@@ -400,6 +400,15 @@ function clean_tmps(tree_app: TreeApp): void {
                 break
             case TypeTmp.TEXT:
                 const obj = tree_app.pool.get(el_key) as ElObj;
+                if (obj.el_text.textContent !== null && obj.el_text.textContent.trim()) {
+                    obj.el_text.textContent = obj.el_text.textContent.trim();
+                    obj.el_text.style.color = 'black';
+                    obj.has_text = true;
+                } else {
+                    obj.el_text.textContent = STD_TEXT;
+                    obj.el_text.style.color = 'gray';
+                    obj.has_text = false;
+                }
                 obj.el.setAttribute('fill', OBJ_COLOR);
                 obj.el_text.style.border = '';
                 obj.el_text.contentEditable = 'false';
@@ -591,6 +600,12 @@ function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function register_event(tree_app: TreeApp, type: string, listener: (e: MouseEvent) => void): void {
+    tree_app.svg_groups.tree_grid.addEventListener(type, listener as EventListener);
+    tree_app.events.push([type, listener]);
+}
+
+
 function set_normal_mode(tree_app: TreeApp): void {
     let el_dragged: ElObj | SVGSVGElement | ElBond | null = null;
     let is_dragging: boolean = false;
@@ -623,6 +638,7 @@ function set_normal_mode(tree_app: TreeApp): void {
             const el_to = tree_app.pool.get(el_dragged.to as ElKey) as ElObj;
             const reinsert_args = {
                 starter_obj: pos === 's' ? el_from : el_to,
+                initial_obj: pos === 'e' ? el_from : el_to,
                 line: el_dragged,
                 orient: pos,
             };
@@ -766,6 +782,7 @@ function get_coords(tree_app: TreeApp): Vector2 {
 type Orient = 's' | 'e';
 type Reinsert = {
     starter_obj: ElObj,
+    initial_obj: ElObj,
     line: ElBond,
     orient: Orient;
 };
@@ -824,15 +841,7 @@ function set_insert_mode_bond(tree_app: TreeApp, reinsert_args?: Reinsert): void
                 is_bonded = obj.el_key === other_obj_key;
             }
             if (!is_bonded) {
-                if (orient === 's') {
-                    line.move_to(starter_obj as ElObj, obj);
-                    starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
-                    obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
-                } else if (orient === 'e') {
-                    line.move_to(obj, starter_obj as ElObj);
-                    starter_obj.childrens.set(line.el_key, ['e', obj.el_key]);
-                    obj.childrens.set(line.el_key, ['s', starter_obj.el_key]);
-                }
+                bond_line(obj, starter_obj, line);
                 line.to = obj.el_key;
                 starter_obj.el.setAttribute('fill', OBJ_COLOR);
                 obj.el.setAttribute('fill', OBJ_COLOR);
@@ -861,15 +870,51 @@ function set_insert_mode_bond(tree_app: TreeApp, reinsert_args?: Reinsert): void
         }
     };
 
-    tree_app.svg_groups.tree_grid.addEventListener('mouseover', handle_mouse_over);
-    tree_app.svg_groups.tree_grid.addEventListener('mouseout',  handle_mouse_out);
-    tree_app.svg_groups.tree_grid.addEventListener('mousemove', handle_mouse_move);
-    tree_app.svg_groups.tree_grid.addEventListener('mousedown', handle_mouse_down);
+    function bond_line(obj: ElObj, starter_obj: ElObj, line: ElBond): void {
+        if (orient === 's') {
+            line.move_to(starter_obj as ElObj, obj);
+            starter_obj.childrens.set(line.el_key, ['s', obj.el_key]);
+            obj.childrens.set(line.el_key, ['e', starter_obj.el_key]);
+            line.to = obj.el_key;
+        } else if (orient === 'e') {
+            line.move_to(obj, starter_obj as ElObj);
+            starter_obj.childrens.set(line.el_key, ['e', obj.el_key]);
+            obj.childrens.set(line.el_key, ['s', starter_obj.el_key]);
+            line.from = obj.el_key;
+        }
+    }
 
-    tree_app.events.push(['mouseover', handle_mouse_over]);
-    tree_app.events.push(['mouseout',  handle_mouse_out]);
-    tree_app.events.push(['mousemove', handle_mouse_move]);
-    tree_app.events.push(['mousedown', handle_mouse_down]);
+    const handle_mouse_up = (e: MouseEvent) => {
+        if (reinsert_args !== undefined && starter_obj !== null && line !== null) {
+            const target: HTMLElement | null = e.target as HTMLElement;
+            const obj = search_el(tree_app, target, 'obj') as ElObj;
+            if (obj === null || obj.el_key === starter_obj.el_key) {
+                const obj = reinsert_args.initial_obj;
+                bond_line(obj, starter_obj, line);
+            } else {
+                let is_bonded: boolean = false;;
+                for (const [_, other_obj_key] of starter_obj.childrens.values()) {
+                    is_bonded = obj.el_key === other_obj_key;
+                }
+                if (!is_bonded) {
+                    bond_line(obj, starter_obj, line);
+                    starter_obj.el.setAttribute('fill', OBJ_COLOR);
+                    obj.el.setAttribute('fill', OBJ_COLOR);
+                }
+            }
+            tree_app.tmps.pop();
+            is_putting = false;
+            starter_obj = null;
+            line = null;
+            switch_mode(tree_app, null, "NORMAL_MODE");
+        }
+    };
+
+    register_event(tree_app, 'mouseover', handle_mouse_over);
+    register_event(tree_app, 'mouseout',  handle_mouse_out);
+    register_event(tree_app, 'mousemove', handle_mouse_move);
+    register_event(tree_app, 'mousedown', handle_mouse_down);
+    register_event(tree_app, 'mouseup', handle_mouse_up);
 }
 
 function set_insert_mode_obj(tree_app: TreeApp, e: KeyboardEvent | null) {
@@ -943,6 +988,10 @@ function set_insert_mode_text(tree_app: TreeApp) {
             obj.el_text.contentEditable = 'false';
             obj = null;
             tree_app.tmps.pop();
+        } else if (is_inserting && obj !== null && obj_tmp !== null) {
+            (obj_tmp as ElObj).el.setAttribute('fill', OBJ_COLOR_ACTIVE);
+            (obj_tmp as ElObj).el_text.style.border = '2px dashed cadetblue';
+            (obj_tmp as ElObj).el_text.contentEditable = 'true';
         }
     };
 
@@ -975,9 +1024,23 @@ function set_insert_mode_text(tree_app: TreeApp) {
             obj.el_text.style.padding = '';
             obj = null;
             tree_app.tmps.pop();
-
             window.addEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
             window.addEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
+
+            const obj_tmp: El | null = search_el(tree_app, e.target as HTMLElement, 'obj');
+            if (obj_tmp !== null) {
+                obj = obj_tmp as ElObj;
+                tree_app.tmps.push([TypeTmp.TEXT, obj_tmp.el_key]);
+                if (!obj.has_text) {
+                    obj.el_text.textContent = '';
+                }
+                obj.el_text.style.border = '';
+                obj.el_text.style.padding = '2px';
+                obj.el_text.style.userSelect = 'text'
+                is_inserting = true;
+                window.removeEventListener('keyup', wrapper_handler_window_keyup_switch_modes);
+                window.removeEventListener('keyup', wrapper_handler_window_keyup_zoom_and_pan);
+            }
         }
     };
 
@@ -1077,10 +1140,15 @@ function set_initial_mode(tree_app: TreeApp): void {
     grid_pat.setAttribute('width', (GRID_SIZE*2).toString());
     grid_pat.setAttribute('height', (GRID_SIZE*2).toString());
 
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="white"/>`)
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(240, 240, 240)"/>`)
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="white"/>`)
-    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(240, 240, 240)"/>`)
+    // grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="white"/>`)
+    // grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(240, 240, 240)"/>`)
+    // grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="white"/>`)
+    // grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(240, 240, 240)"/>`)
+
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="black"/>`)
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='0'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(90, 90, 90)"/>`)
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='${GRID_SIZE}'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="black"/>`)
+    grid_pat.insertAdjacentHTML('beforeend', `<rect x='0'  y='${GRID_SIZE}'  width='${GRID_SIZE}' height='${GRID_SIZE}' fill="rgb(90, 90, 90)"/>`)
 
     const grid = document.getElementById('grid');
     if (grid === null) throw new Error('HTML element with ID `grid` is not found!');
@@ -1225,17 +1293,16 @@ if (document.readyState === "loading") {
     main();
 }
 //TODO 
-//1) increase dim of Obj if text is large
-//2) Botão e função para deletar vínculos
-//3) Implementar no modo normal uma maneira de mover vínculos, em cada uma das pontas, seja na saída seja na entrada
+//1) increase dim of Obj if text is large;
+//2) Aprimorar o algoritmo que coloca o ícone de deletar vínculos;
 //4)??? Adicionar um cursor customizado para cada uma das funções do menu
 // https://blog.logrocket.com/creating-custom-mouse-cursor-css/
 //7) Implementar um sistema de undo e redo
-//9) Keep bond line more close of mouse
 //10) ver se é possível corrigir o erro de o cursor do mouse aparecer embaixo quando clica para editar no modo texto
 //12) movimentar o grid com o mouse é muito lento quando em excessivo zoom out 
 //13) zoom in and zoom out com o mouse wheel
-//15) bug no modo de inserir texto, quando um texto está ativo e eu clico em outro obj, eu preciso sair do obj para ativar a inserção.
 //16)Adicionar um indicar de qual o zoom no momento e em qual posição (x=0, y=0, é o centro);
 //17) adicionar um limite para movimentação pan
 //18) Adicionar um efeito de magneto quando inserir o elemento de vinculação ao se aproximar de um objeto.
+//19) deletar com o teclado
+//20) Ferramenta para selecionar múltiplos objetos e vínculos;
