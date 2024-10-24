@@ -508,26 +508,32 @@ const wrapper_handler_window_keyup_switch_modes = (e: KeyboardEvent) => {
     handler_window_keyup_switch_modes(e, tree_app);
 };
 const handler_window_keyup_switch_modes = (e: KeyboardEvent, tree_app: TreeApp) => {
-    switch (e.code) {
-        case 'KeyN':
+    switch (e.key) {
+        case 'n':
             switch_mode(tree_app, e, "NORMAL_MODE");
             for (const [e, ..._] of modes) e.classList.remove('active');
             if (normal_mode_el !== null) normal_mode_el.classList.add('active');
             break;
-        case 'KeyC':
+        case 'c':
             switch_mode(tree_app, e, "INSERT_MODE", "OBJ");
             for (const [e, ..._] of modes) e.classList.remove('active');
             if (insert_obj_el !== null) insert_obj_el.classList.add('active');
             break;
-        case 'KeyV':
+        case 'v':
             switch_mode(tree_app, e, "INSERT_MODE", "BOND");
             for (const [e, ..._] of modes) e.classList.remove('active');
             if (insert_bond_el !== null) insert_bond_el.classList.add('active');
             break;
-        case 'KeyT':
+        case 't':
             switch_mode(tree_app, e, "INSERT_MODE", "TEXT");
             for (const [e, ..._] of modes) e.classList.remove('active');
             if (insert_text_el !== null) insert_text_el.classList.add('active');
+            break;
+        case 'd':
+            if (tree_app.current_mode === 'NORMAL_MODE' && tree_app.current_state.active_obj !== null) {
+                tree_app.pool.remove(tree_app.current_state.active_obj, tree_app.svg_groups.elements);
+                tree_app.current_state.active_obj = null;
+            }
             break;
     }
 };
@@ -1288,6 +1294,7 @@ if (document.readyState === "loading") {
     main();
 }
 //TODO 
+//0) Deletar um vínculo quando um objeto ao qual ele está vinculado for deletado;
 //1) increase dim of Obj if text is large;
 //2) Aprimorar o algoritmo que coloca o ícone de deletar vínculos;
 //4)??? Adicionar um cursor customizado para cada uma das funções do menu
@@ -1297,7 +1304,7 @@ if (document.readyState === "loading") {
 //12) movimentar o grid com o mouse é muito lento quando em excessivo zoom out 
 //13) zoom in and zoom out com o mouse wheel
 //16)Adicionar um indicar de qual o zoom no momento e em qual posição (x=0, y=0, é o centro);
-//17) adicionar um limite para movimentação pan
+//17) não permitir que seja possível criar objeto e vínculo no além grid (no void);
 //18) Adicionar um efeito de magneto quando inserir o elemento de vinculação ao se aproximar de um objeto.
-//19) deletar com o teclado
+//19) Adicionar a opção de deletar no teclado;
 //20) Ferramenta para selecionar múltiplos objetos e vínculos;

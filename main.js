@@ -441,34 +441,40 @@ const wrapper_handler_window_keyup_switch_modes = (e) => {
     handler_window_keyup_switch_modes(e, tree_app);
 };
 const handler_window_keyup_switch_modes = (e, tree_app) => {
-    switch (e.code) {
-        case 'KeyN':
+    switch (e.key) {
+        case 'n':
             switch_mode(tree_app, e, "NORMAL_MODE");
             for (const [e, ..._] of modes)
                 e.classList.remove('active');
             if (normal_mode_el !== null)
                 normal_mode_el.classList.add('active');
             break;
-        case 'KeyC':
+        case 'c':
             switch_mode(tree_app, e, "INSERT_MODE", "OBJ");
             for (const [e, ..._] of modes)
                 e.classList.remove('active');
             if (insert_obj_el !== null)
                 insert_obj_el.classList.add('active');
             break;
-        case 'KeyV':
+        case 'v':
             switch_mode(tree_app, e, "INSERT_MODE", "BOND");
             for (const [e, ..._] of modes)
                 e.classList.remove('active');
             if (insert_bond_el !== null)
                 insert_bond_el.classList.add('active');
             break;
-        case 'KeyT':
+        case 't':
             switch_mode(tree_app, e, "INSERT_MODE", "TEXT");
             for (const [e, ..._] of modes)
                 e.classList.remove('active');
             if (insert_text_el !== null)
                 insert_text_el.classList.add('active');
+            break;
+        case 'd':
+            if (tree_app.current_mode === 'NORMAL_MODE' && tree_app.current_state.active_obj !== null) {
+                tree_app.pool.remove(tree_app.current_state.active_obj, tree_app.svg_groups.elements);
+                tree_app.current_state.active_obj = null;
+            }
             break;
     }
 };
